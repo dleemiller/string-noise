@@ -3,24 +3,21 @@
 #include <string.h>
 #include <time.h>
 
-#include <Python.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
 // The augmented string_noise function
 static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyObject* kwds) {
-    PyObject *input_string, *replacement_mapping, *output_string = NULL, *key, *value;
+    PyObject *input_string, *replacement_mapping, *output_string = NULL, *key, *value, *debug_obj = NULL;
     double probability;
+    int debug = 0;  // Default debug mode is off
     Py_ssize_t i, input_len;
     char *replacements_done;
 
-    static char* kwlist[] = {"input_string", "replacement_mapping", "probability", NULL};
+    static char* kwlist[] = {"input_string", "replacement_mapping", "probability", "debug", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!d", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!d|O", kwlist,
                                      &input_string,
                                      &PyDict_Type, &replacement_mapping,
-                                     &probability)) {
+                                     &probability,
+                                     &debug_obj)) {
         return NULL;
     }
 
@@ -29,14 +26,21 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
         return NULL;
     }
 
+    if (debug_obj && PyObject_IsTrue(debug_obj)) {
+        debug = 1;
+    }
+
     // Validate the replacement mapping
     Py_ssize_t pos = 0;
     while (PyDict_Next(replacement_mapping, &pos, &key, &value)) {
+        if (!PyUnicode_Check(key)) {
+            PyErr_SetString(PyExc_TypeError, "All keys in the replacement mapping must be strings");
+            return NULL;
+        }
         if (!(PyUnicode_Check(value) || (PyList_Check(value) && PyList_Size(value) > 0))) {
             PyErr_SetString(PyExc_TypeError, "All values in the replacement mapping must be strings or non-empty lists of strings");
             return NULL;
         }
-    
         if (PyList_Check(value)) {
             for (Py_ssize_t i = 0; i < PyList_Size(value); i++) {
                 PyObject *item = PyList_GetItem(value, i);
@@ -48,7 +52,9 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
         }
     }
 
-    printf("Original input string: %s\n", PyUnicode_AsUTF8(input_string));
+    if (debug) {
+        printf("Original input string: %s\n", PyUnicode_AsUTF8(input_string));
+    }
 
     // Step 1: Create an array to store the keys
     PyObject **sorted_keys = (PyObject **)PyMem_RawMalloc(PyDict_Size(replacement_mapping) * sizeof(PyObject *));
@@ -65,7 +71,7 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
         sorted_keys[key_count++] = key;
     }
     
-    // Step 3: Sort the keys by length in descending order (simple bubble sort for demonstration; consider a more efficient sort for large datasets)
+    // Step 3: Sort the keys by length in descending order
     for (Py_ssize_t i = 0; i < key_count - 1; i++) {
         for (Py_ssize_t j = 0; j < key_count - i - 1; j++) {
             if (PyUnicode_GET_LENGTH(sorted_keys[j]) < PyUnicode_GET_LENGTH(sorted_keys[j + 1])) {
@@ -79,6 +85,7 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
     input_len = PyUnicode_GET_LENGTH(input_string);
     replacements_done = (char *)PyMem_RawMalloc(input_len);
     if (!replacements_done) {
+        PyMem_RawFree(sorted_keys);
         PyErr_NoMemory();
         return NULL;
     }
@@ -86,6 +93,7 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
 
     output_string = PyUnicode_FromObject(input_string);
     if (!output_string) {
+        PyMem_RawFree(sorted_keys);
         PyMem_RawFree(replacements_done);
         PyErr_NoMemory();
         return NULL;
@@ -98,18 +106,21 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
         for (Py_ssize_t sorted_index = 0; sorted_index < key_count; sorted_index++) {
             key = sorted_keys[sorted_index];
             value = PyDict_GetItem(replacement_mapping, key);
-
+    
             const Py_ssize_t key_len = PyUnicode_GET_LENGTH(key);
             if (i + key_len > input_len) continue;
     
             PyObject *substring = PyUnicode_Substring(input_string, i, i + key_len);
             if (!substring) {
+                PyMem_RawFree(sorted_keys);
                 PyMem_RawFree(replacements_done);
                 Py_DECREF(output_string);
                 return NULL;
             }
     
-            printf("Checking substring: %s against key: %s\n", PyUnicode_AsUTF8(substring), PyUnicode_AsUTF8(key));
+            if (debug) {
+                printf("Checking substring: %s against key: %s\n", PyUnicode_AsUTF8(substring), PyUnicode_AsUTF8(key));
+            }
     
             int compare_result = PyUnicode_Compare(substring, key);
             Py_DECREF(substring);
@@ -125,6 +136,7 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
                     replacement = value;
                 } else {
                     // Handle unexpected data type
+                    PyMem_RawFree(sorted_keys);
                     PyMem_RawFree(replacements_done);
                     Py_DECREF(output_string);
                     PyErr_SetString(PyExc_TypeError, "Replacement mapping values must be strings or lists of strings");
@@ -132,53 +144,67 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
                 }
     
                 if (!replacement) {
+                    PyMem_RawFree(sorted_keys);
                     PyMem_RawFree(replacements_done);
                     Py_DECREF(output_string);
                     return NULL;
                 }
-                printf("Replacing '%s' with '%s' at index %zd\n", PyUnicode_AsUTF8(key), PyUnicode_AsUTF8(replacement), i);
-            
+                if (debug) {
+                    printf("Replacing '%s' with '%s' at index %zd\n", PyUnicode_AsUTF8(key), PyUnicode_AsUTF8(replacement), i);
+                }
+    
                 // Create a new string with the specific occurrence replaced
                 PyObject *left_part = PyUnicode_Substring(output_string, 0, i);
                 PyObject *right_part = PyUnicode_Substring(output_string, i + key_len, input_len);
                 if (!left_part || !right_part) {
                     Py_XDECREF(left_part);  // Py_XDECREF safely handles NULL
                     Py_XDECREF(right_part);
+                    PyMem_RawFree(sorted_keys);
                     PyMem_RawFree(replacements_done);
                     Py_DECREF(output_string);
                     return NULL;
                 }
-            
+    
                 PyObject *new_output = PyUnicode_Concat(left_part, replacement);
                 Py_DECREF(left_part);
                 if (!new_output) {
                     Py_DECREF(right_part);
+                    PyMem_RawFree(sorted_keys);
                     PyMem_RawFree(replacements_done);
                     Py_DECREF(output_string);
                     return NULL;
                 }
-            
+    
                 PyObject *final_output = PyUnicode_Concat(new_output, right_part);
                 Py_DECREF(new_output);
                 Py_DECREF(right_part);
                 if (!final_output) {
+                    PyMem_RawFree(sorted_keys);
                     PyMem_RawFree(replacements_done);
                     Py_DECREF(output_string);
                     return NULL;
                 }
-            
+    
                 Py_DECREF(output_string);
                 output_string = final_output;
-                printf("Output string after replacement: %s\n", PyUnicode_AsUTF8(output_string));
-            
+                input_len = PyUnicode_GET_LENGTH(output_string);  // Update input length after replacement
+    
+                //if (PyUnicode_GET_LENGTH(replacement) == 0 && key_len > 0) {
+                //    i--; // Decrement 'i' to account for the shift in characters
+                //}
+    
+                if (debug) {
+                    printf("Output string after replacement: %s\n", PyUnicode_AsUTF8(output_string));
+                }
+    
                 // Mark characters as replaced
                 for (Py_ssize_t k = 0; k < key_len; k++) {
-                    replacements_done[i + k] = 1;
+                    if (i + k < input_len) {
+                        replacements_done[i + k] = 1;
+                    }
                 }
-            
-                // Move past the replaced characters in the loop
                 i += key_len - 1;
-                break;
+                break;  // Exit the inner loop after a successful replacement
             }
         }
     }
@@ -191,6 +217,7 @@ static PyObject* string_noise_augment_string(PyObject* self, PyObject* args, PyO
 
     return output_string;
 }
+
 
 
 static PyMethodDef StringNoiseMethods[] = {
