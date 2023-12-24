@@ -2,18 +2,24 @@ import random
 import re
 import unittest
 from string_noise import string_noise
-#import pseudocode as string_noise
+
+# import pseudocode as string_noise
+
 
 class TestStringNoise(unittest.TestCase):
     def test_augmentation(self):
         mapping = {"a": ["e"], "e": ["i"], "o": ["u"]}
         input_string = "hello world"
-        augmented_string = string_noise.augment_string(input_string, mapping, 1.0, debug=False)
+        augmented_string = string_noise.augment_string(
+            input_string, mapping, 1.0, debug=False
+        )
         self.assertEqual(augmented_string, "hillu wurld")
 
         input_string = "hello world"
         augmented_string = string_noise.augment_string(input_string, mapping, 0.0)
-        self.assertEqual(input_string, augmented_string)  # Since probability is 0, it should never change
+        self.assertEqual(
+            input_string, augmented_string
+        )  # Since probability is 0, it should never change
 
     def test_multi_character_sequences(self):
         mapping = {"abc": ["x"], "a": ["y"], "bc": ["z"]}
@@ -25,16 +31,22 @@ class TestStringNoise(unittest.TestCase):
         mapping = {"o": ["u"], "oo": ["ue"]}
         input_string = "foot"
         # With probability 1, ensure only one replacement happens, preferring the longer match
-        augmented_string = string_noise.augment_string(input_string, mapping, 1.0, debug=True)
+        augmented_string = string_noise.augment_string(
+            input_string, mapping, 1.0, debug=True
+        )
         self.assertIn(augmented_string, ["fuet", "fuut"])
 
     def test_probabilities(self):
         mapping = {"a": ["e"]}
         input_string = "banana"
         # With probability 0, the string should not change
-        self.assertEqual(string_noise.augment_string(input_string, mapping, 0.0), "banana")
+        self.assertEqual(
+            string_noise.augment_string(input_string, mapping, 0.0), "banana"
+        )
         # With probability 1, all 'a's should turn into 'e's
-        self.assertEqual(string_noise.augment_string(input_string, mapping, 1.0), "benene")
+        self.assertEqual(
+            string_noise.augment_string(input_string, mapping, 1.0), "benene"
+        )
 
     def test_invalid_inputs(self):
         mapping = {"a": ["e"]}
@@ -53,7 +65,11 @@ class TestStringNoise(unittest.TestCase):
         # Mixed data types in mapping should still work with probability 1
         augmented_string = string_noise.augment_string(input_string, mapping, 1.0)
         # We don't know whether it will replace 'b' with 'c' or 'd', so check if either is true
-        self.assertTrue(augmented_string.startswith("e") and "ec" in augmented_string or "ed" in augmented_string)
+        self.assertTrue(
+            augmented_string.startswith("e")
+            and "ec" in augmented_string
+            or "ed" in augmented_string
+        )
 
     def test_empty_string_input(self):
         mapping = {"a": ["e"]}
@@ -61,11 +77,15 @@ class TestStringNoise(unittest.TestCase):
 
     def test_empty_mapping(self):
         input_string = "hello world"
-        self.assertEqual(string_noise.augment_string(input_string, {}, 1.0), input_string)
+        self.assertEqual(
+            string_noise.augment_string(input_string, {}, 1.0), input_string
+        )
 
     def test_replacement_with_empty_strings(self):
         mapping = {"a": [""], "b": [""]}
-        self.assertEqual(string_noise.augment_string("abracadabra", mapping, 1.0, debug=True), "rcdr")
+        self.assertEqual(
+            string_noise.augment_string("abracadabra", mapping, 1.0, debug=True), "rcdr"
+        )
 
     def test_boundary_probabilities(self):
         mapping = {"a": ["e"]}
@@ -76,11 +96,13 @@ class TestStringNoise(unittest.TestCase):
 
     def test_non_ascii_characters(self):
         mapping = {"é": ["e"], "ö": ["o"]}
-        self.assertEqual(string_noise.augment_string("café öl", mapping, 1.0), "cafe ol")
+        self.assertEqual(
+            string_noise.augment_string("café öl", mapping, 1.0), "cafe ol"
+        )
 
-#    def test_overlapping_replacement_keys(self):
-#        mapping = {"ab": ["x"], "bc": ["y"]}
-#        self.assertEqual(string_noise.augment_string("abc", mapping, 1.0), "x")
+    #    def test_overlapping_replacement_keys(self):
+    #        mapping = {"ab": ["x"], "bc": ["y"]}
+    #        self.assertEqual(string_noise.augment_string("abc", mapping, 1.0), "x")
 
     def test_replacement_list_with_multiple_items(self):
         mapping = {"a": ["e", "i"]}
@@ -108,5 +130,48 @@ class TestStringNoise(unittest.TestCase):
         with self.assertRaises(TypeError):
             string_noise.augment_string("1234", mapping, 1.0)
 
-if __name__ == '__main__':
+    def test_weighted_replacement(self):
+        input_string = "ab"
+        mapping = {"a": {"@": 0.5, "4": 0.5}, "b": {"6": 1.0}}
+        probability = 1.0
+
+        result = string_noise.augment_string(input_string, mapping, probability)
+        # Check if all characters are replaced
+        self.assertTrue(all(c in {"@", "4", "6"} for c in result))
+
+    def test_uniform_replacement(self):
+        input_string = "abc"
+        mapping = {"a": ["@", "4"], "b": ["6"]}
+        probability = 1.0
+
+        result = string_noise.augment_string(input_string, mapping, probability)
+        # Check if 'c' remains unchanged and 'a', 'b' are replaced
+        self.assertIn(result[0], {"@", "4"})
+        self.assertEqual(result[1], "6")
+        self.assertEqual(result[2], "c")
+
+    def test_mixed_replacement(self):
+        input_string = "abc"
+        mapping = {"a": {"@": 0.5, "4": 0.5}, "b": ["6", "β"], "c": "C"}
+        probability = 1.0
+
+        result = string_noise.augment_string(
+            input_string, mapping, probability, debug=True
+        )
+        print(repr(result))
+        self.assertIn(result[0], {"@", "4"})
+        self.assertIn(result[1], {"6", "β"})
+        self.assertEqual(result[2], "C")
+
+    def test_partial_replacement(self):
+        input_string = "abcdβ"
+        mapping = {"a": "@", "b": "β"}
+        probability = 0.5
+
+        result = string_noise.augment_string(input_string, mapping, probability)
+        if not re.match(r"[a@][bβ]cdβ", result):
+            raise ValueError(result)
+
+
+if __name__ == "__main__":
     unittest.main()
