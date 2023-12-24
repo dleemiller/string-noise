@@ -32,7 +32,7 @@ class TestStringNoise(unittest.TestCase):
         input_string = "foot"
         # With probability 1, ensure only one replacement happens, preferring the longer match
         augmented_string = string_noise.augment_string(
-            input_string, mapping, 1.0, debug=True
+            input_string, mapping, 1.0, debug=False
         )
         self.assertIn(augmented_string, ["fuet", "fuut"])
 
@@ -84,7 +84,7 @@ class TestStringNoise(unittest.TestCase):
     def test_replacement_with_empty_strings(self):
         mapping = {"a": [""], "b": [""]}
         self.assertEqual(
-            string_noise.augment_string("abracadabra", mapping, 1.0, debug=True), "rcdr"
+            string_noise.augment_string("abracadabra", mapping, 1.0, debug=False), "rcdr"
         )
 
     def test_boundary_probabilities(self):
@@ -156,9 +156,8 @@ class TestStringNoise(unittest.TestCase):
         probability = 1.0
 
         result = string_noise.augment_string(
-            input_string, mapping, probability, debug=True
+            input_string, mapping, probability, debug=False
         )
-        print(repr(result))
         self.assertIn(result[0], {"@", "4"})
         self.assertIn(result[1], {"6", "β"})
         self.assertEqual(result[2], "C")
