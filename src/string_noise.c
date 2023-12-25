@@ -200,74 +200,63 @@ static PyObject* select_replacement(PyObject* value, int debug) {
 
 
 static PyObject* perform_replacements(PyObject* input_string, PyObject* replacement_mapping, double probability, int debug) {
-    // Get the length of the input string.
-    Py_ssize_t input_len = PyUnicode_GET_LENGTH(input_string);
+    PyObject *output_string = NULL, *keys = NULL, *normalized_output = NULL;
+    PyObject **keys_array = NULL;
+    Py_ssize_t input_len, key_count, output_len = 0, output_capacity;
+    int error_occurred = 0;
 
-    // Initially, allocate the output string buffer to be the same size as the input string.
-    Py_ssize_t output_capacity = input_len;
-    PyObject *output_string = PyUnicode_New(output_capacity, 0x10FFFF);
+    // Get the length of the input string.
+    input_len = PyUnicode_GET_LENGTH(input_string);
+
+    // Allocate the output string buffer.
+    output_capacity = input_len;
+    output_string = PyUnicode_New(output_capacity, 0x10FFFF);
     if (!output_string) {
         PyErr_NoMemory();
-        return NULL;
+        goto error;
     }
 
     // Get the keys of the replacement mapping and store them in an array.
-    PyObject *keys = PyDict_Keys(replacement_mapping);
-    Py_ssize_t key_count = PyList_Size(keys);
-    PyObject** keys_array = (PyObject**)malloc(key_count * sizeof(PyObject*));
+    keys = PyDict_Keys(replacement_mapping);
+    key_count = PyList_Size(keys);
+    keys_array = (PyObject**)malloc(key_count * sizeof(PyObject*));
     if (!keys_array) {
         PyErr_NoMemory();
-        Py_DECREF(output_string);
-        Py_DECREF(keys);
-        return NULL;
+        goto error;
     }
 
-    // Increment reference count for each key.
     for (Py_ssize_t i = 0; i < key_count; i++) {
         keys_array[i] = PyList_GetItem(keys, i);
         Py_INCREF(keys_array[i]);
     }
 
-    Py_ssize_t output_len = 0;
-    int error_occurred = 0;
-
     // Iterate over each character of the input string.
     for (Py_ssize_t i = 0; i < input_len; i++) {
-        // Decide randomly whether to replace the current character.
         if ((double)rand() / RAND_MAX > probability) {
-            // If not replacing, copy the current character to the output string.
             Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, i);
             PyUnicode_WRITE(PyUnicode_KIND(output_string), PyUnicode_DATA(output_string), output_len++, ch);
             continue;
         }
 
-        // Shuffle the keys array for random replacement selection.
         shuffle_pyobject_array(keys_array, key_count);
-
-        // Flags to check if replacement happened.
         int replaced = 0;
 
-        // Try to find a match for replacement.
         for (Py_ssize_t j = 0; j < key_count; j++) {
             PyObject *key = keys_array[j];
             PyObject *value = PyDict_GetItem(replacement_mapping, key);
             Py_ssize_t key_len = PyUnicode_GET_LENGTH(key);
 
-            // Skip if the key is longer than the remaining input string.
             if (i + key_len > input_len) continue;
 
-            // Get the substring from the input string that matches the current key's length.
             PyObject *substring = PyUnicode_Substring(input_string, i, i + key_len);
             if (!substring) {
                 error_occurred = 1;
                 break;
             }
 
-            // Compare the substring with the current key.
             int compare_result = PyUnicode_Compare(substring, key);
             Py_DECREF(substring);
 
-            // If the substring matches the key, process the replacement.
             if (compare_result == 0) {
                 PyObject *replacement = select_replacement(value, debug);
                 if (!replacement) {
@@ -276,75 +265,75 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
                 }
 
                 Py_ssize_t repl_len = PyUnicode_GET_LENGTH(replacement);
-
-                // Check and resize the output string buffer if necessary.
-                if (output_len + repl_len > output_capacity) {
-                    // Extend the buffer by a fixed amount (e.g., 256 bytes).
-                    output_capacity += 256;
+                if (output_len + repl_len + 128 >= output_capacity) {
+                    output_capacity = output_len + repl_len + 128;
                     if (PyUnicode_Resize(&output_string, output_capacity) < 0) {
-                        Py_DECREF(output_string);
                         Py_DECREF(replacement);
-                        return NULL;
+                        goto error;
                     }
                 }
-
-                // Write the replacement to the output string.
+                // Debug print: Print the current size and capacity of output_string
+                if (debug) {
+                    printf("Current size of output_string: %zd, Current output_capacity: %zd\n", output_len, output_capacity);
+                }
                 for (Py_ssize_t k = 0; k < repl_len; k++) {
                     Py_UCS4 ch = PyUnicode_READ_CHAR(replacement, k);
-                    if (debug) {
-                        printf("Writing character: %x (Unicode code point)\n", ch);
-                    }
                     PyUnicode_WRITE(PyUnicode_KIND(output_string), PyUnicode_DATA(output_string), output_len++, ch);
                 }
 
                 Py_DECREF(replacement);
-
-                // Move the input string index forward and mark as replaced.
                 i += key_len - 1;
                 replaced = 1;
                 break;
             }
         }
 
-        // If an error occurred, exit the loop.
-        if (error_occurred) break;
+        if (error_occurred) {
+            break;
+        }
 
-        // If no replacement occurred, copy the current character to the output string.
         if (!replaced) {
             Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, i);
             PyUnicode_WRITE(PyUnicode_KIND(output_string), PyUnicode_DATA(output_string), output_len++, ch);
         }
     }
 
-    // Clean up the keys array.
-    for (Py_ssize_t i = 0; i < key_count; i++) {
-        Py_DECREF(keys_array[i]);
-    }
-    free(keys_array);
-    Py_DECREF(keys);
-
-    // If an error occurred, clean up and return NULL.
     if (error_occurred) {
-        Py_XDECREF(output_string);
-        return NULL;
+        goto error;
     }
 
-    // Resize the output string to the actual length of the written characters.
     if (PyUnicode_Resize(&output_string, output_len) < 0) {
-        Py_DECREF(output_string);
-        return NULL;
+        goto error;
     }
 
-    // Normalize the output string.
-    PyObject *normalized_output = normalize_string(output_string);
-    Py_DECREF(output_string);  // Clean up the original output string.
-
-    // If normalization failed, return NULL.
+    normalized_output = normalize_string(output_string);
     if (!normalized_output) {
-        return NULL;
+        goto error;
     }
 
-    // Return the normalized output string.
+    goto final;
+
+error:
+    Py_XDECREF(output_string);
+    Py_XDECREF(normalized_output);
+    if (keys_array) {
+        for (Py_ssize_t i = 0; i < key_count; i++) {
+            Py_XDECREF(keys_array[i]);
+        }
+        free(keys_array);
+    }
+    Py_XDECREF(keys);
+    return NULL;
+
+final:
+    Py_DECREF(output_string);
+    if (keys_array) {
+        for (Py_ssize_t i = 0; i < key_count; i++) {
+            Py_DECREF(keys_array[i]);
+        }
+        free(keys_array);
+    }
+    Py_DECREF(keys);
     return normalized_output;
 }
 
