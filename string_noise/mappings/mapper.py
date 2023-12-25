@@ -4,7 +4,6 @@ from ..string_noise import augment_string
 
 
 class Mapper:
-    default_resource = "string_noise.mapping.default"
 
     def __init__(self, json_data):
         self._json_data = json_data
