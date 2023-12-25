@@ -203,8 +203,9 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
     // Get the length of the input string.
     Py_ssize_t input_len = PyUnicode_GET_LENGTH(input_string);
 
-    // Create a new Unicode string to hold the output.
-    PyObject *output_string = PyUnicode_New(input_len, 0x10FFFF);
+    // Initially, allocate the output string buffer to be the same size as the input string.
+    Py_ssize_t output_capacity = input_len;
+    PyObject *output_string = PyUnicode_New(output_capacity, 0x10FFFF);
     if (!output_string) {
         PyErr_NoMemory();
         return NULL;
@@ -268,17 +269,26 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
 
             // If the substring matches the key, process the replacement.
             if (compare_result == 0) {
-                // Use the new function to select the replacement.
                 PyObject *replacement = select_replacement(value, debug);
-
-                // Check if replacement was successfully obtained.
                 if (!replacement) {
                     error_occurred = 1;
                     break;
                 }
 
-                // Write the replacement to the output string.
                 Py_ssize_t repl_len = PyUnicode_GET_LENGTH(replacement);
+
+                // Check and resize the output string buffer if necessary.
+                if (output_len + repl_len > output_capacity) {
+                    // Extend the buffer by a fixed amount (e.g., 256 bytes).
+                    output_capacity += 256;
+                    if (PyUnicode_Resize(&output_string, output_capacity) < 0) {
+                        Py_DECREF(output_string);
+                        Py_DECREF(replacement);
+                        return NULL;
+                    }
+                }
+
+                // Write the replacement to the output string.
                 for (Py_ssize_t k = 0; k < repl_len; k++) {
                     Py_UCS4 ch = PyUnicode_READ_CHAR(replacement, k);
                     if (debug) {

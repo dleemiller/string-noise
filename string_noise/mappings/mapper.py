@@ -1,6 +1,11 @@
 import json
+import importlib.resources
+from ..string_noise import augment_string
 
-class MappingLoader:
+
+class Mapper:
+    default_resource = "string_noise.mapping.default"
+
     def __init__(self, json_data):
         self._json_data = json_data
         if not self._validate():
@@ -29,8 +34,10 @@ class MappingLoader:
         return True
 
     @classmethod
-    def load(cls, file_path):
-        with open(file_path, 'r') as file:
+    def load(cls, resource_package, resource_path):
+        with importlib.resources.open_text(resource_package, resource_path) as file:
             json_data = json.load(file)
             return cls(json_data)
 
+    def __call__(self, text: str, probability: float):
+        return augment_string(text, self.data, probability, debug=False)

@@ -1,1 +1,1 @@
-from .mappings import MappingLoader
+from .mapper import Mapper

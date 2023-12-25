@@ -100,9 +100,9 @@ class TestStringNoise(unittest.TestCase):
             string_noise.augment_string("café öl", mapping, 1.0), "cafe ol"
         )
 
-    #    def test_overlapping_replacement_keys(self):
-    #        mapping = {"ab": ["x"], "bc": ["y"]}
-    #        self.assertEqual(string_noise.augment_string("abc", mapping, 1.0), "x")
+    ##    def test_overlapping_replacement_keys(self):
+    ##        mapping = {"ab": ["x"], "bc": ["y"]}
+    ##        self.assertEqual(string_noise.augment_string("abc", mapping, 1.0), "x")
 
     def test_replacement_list_with_multiple_items(self):
         mapping = {"a": ["e", "i"]}
@@ -114,7 +114,7 @@ class TestStringNoise(unittest.TestCase):
         mapping = {"a": ["e"]}
         large_string = "a" * 10000
         # Just testing that it runs without error, not checking output
-        string_noise.augment_string(large_string, mapping, 0.5)
+        string_noise.augment_string(large_string, mapping, 0.5, debug=False)
 
     def test_invalid_types_in_replacement_lists(self):
         mapping = {"a": [1, "b"]}
@@ -135,7 +135,7 @@ class TestStringNoise(unittest.TestCase):
         mapping = {"a": {"@": 0.5, "4": 0.5}, "b": {"6": 1.0}}
         probability = 1.0
 
-        result = string_noise.augment_string(input_string, mapping, probability)
+        result = string_noise.augment_string(input_string, mapping, probability, debug=False)
         # Check if all characters are replaced
         self.assertTrue(all(c in {"@", "4", "6"} for c in result))
 
