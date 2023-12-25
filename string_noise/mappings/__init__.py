@@ -17,6 +17,7 @@ load_leet = CustomMapper.new("leet.json")
 load_homoglyph = CustomMapper.new("homoglyphs.json")
 load_phonetic = CustomMapper.new("phonetic.json")
 load_keyboard = CustomMapper.new("keyboard.json")
+load_llm_ocr = CustomMapper.new("llm_ocr.json")
 
 __all__ = [
     "CustomMapper",
@@ -24,4 +25,5 @@ __all__ = [
     "load_homoglyph",
     "load_phonetic",
     "load_keyboard",
+    "load_llm_ocr",
 ]
