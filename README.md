@@ -1,6 +1,8 @@
 # string-noise
 Add noise to python strings using various augmentation styles. Applies an N:M character-sequence mapping with probabilistic replacement and weighted replacements. Implemented in C for fast processing. Intended for string augmentation while training in the loop, with realistic synthetic error production.
 
+`python setup.py install`
+
 ## Styles
 ### homoglyph
 replace with similar looking unicode glpyhs
@@ -29,8 +31,6 @@ Nearest keystroke mistakes
 ```
 
 ## Usage
-`python setup.py install`
-
 ```
 from string_noise import load_homoglyph
 
