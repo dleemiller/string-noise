@@ -84,7 +84,8 @@ class TestStringNoise(unittest.TestCase):
     def test_replacement_with_empty_strings(self):
         mapping = {"a": [""], "b": [""]}
         self.assertEqual(
-            string_noise.augment_string("abracadabra", mapping, 1.0, debug=False), "rcdr"
+            string_noise.augment_string("abracadabra", mapping, 1.0, debug=False),
+            "rcdr",
         )
 
     def test_boundary_probabilities(self):
@@ -135,7 +136,9 @@ class TestStringNoise(unittest.TestCase):
         mapping = {"a": {"@": 0.5, "4": 0.5}, "b": {"6": 1.0}}
         probability = 1.0
 
-        result = string_noise.augment_string(input_string, mapping, probability, debug=False)
+        result = string_noise.augment_string(
+            input_string, mapping, probability, debug=False
+        )
         # Check if all characters are replaced
         self.assertTrue(all(c in {"@", "4", "6"} for c in result))
 

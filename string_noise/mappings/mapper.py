@@ -1,12 +1,11 @@
 import json
 import importlib.resources
-from ..string_noise import augment_string
+from ..string_noise import augment_string, normalize
 
 
 class Mapper:
-
     def __init__(self, json_data):
-        self._json_data = json_data
+        self._json_data = normalize(json_data, debug=False)
         if not self._validate():
             raise ValueError("Invalid JSON structure")
 
