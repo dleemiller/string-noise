@@ -1,6 +1,7 @@
 import json
 import importlib.resources
 from ..string_noise import augment_string, normalize
+from ..string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING
 
 
 class Mapper:
@@ -37,5 +38,9 @@ class Mapper:
             json_data = json.load(file)
             return cls(json_data)
 
-    def __call__(self, text: str, probability: float):
-        return augment_string(text, self.data, probability, debug=False)
+    def __call__(
+        self, text: str, probability: float, sort_order=ASCENDING, debug=False, seed=None
+    ):
+        return augment_string(
+            text, self.data, probability, debug=debug, sort_order=sort_order, seed=-1 if seed is None else seed
+        )

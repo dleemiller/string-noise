@@ -1,31 +1,34 @@
-import random
 import re
 import unittest
 from string_noise import string_noise
-
-# import pseudocode as string_noise
-
+from string_noise.string_noise import SHUFFLE, ASCENDING, DESCENDING, RESHUFFLE
 
 class TestStringNoise(unittest.TestCase):
+    def setUp(self):
+        # Set a fixed seed for reproducibility
+        self.seed = 12345
+
     def test_augmentation(self):
         mapping = {"a": ["e"], "e": ["i"], "o": ["u"]}
         input_string = "hello world"
         augmented_string = string_noise.augment_string(
-            input_string, mapping, 1.0, debug=False
+            input_string, mapping, 1.0, debug=False, sort_order=ASCENDING, seed=self.seed
         )
+        # Expected output based on the fixed seed
         self.assertEqual(augmented_string, "hillu wurld")
 
+        # Test with probability 0
         input_string = "hello world"
-        augmented_string = string_noise.augment_string(input_string, mapping, 0.0)
-        self.assertEqual(
-            input_string, augmented_string
-        )  # Since probability is 0, it should never change
+        augmented_string = string_noise.augment_string(input_string, mapping, 0.0, seed=self.seed)
+        self.assertEqual(input_string, augmented_string)  # Should not change
 
     def test_multi_character_sequences(self):
         mapping = {"abc": ["x"], "a": ["y"], "bc": ["z"]}
         input_string = "tabcdef"
-        augmented_string = string_noise.augment_string(input_string, mapping, 1.0)
-        self.assertIn(augmented_string, ["txdef", "tyzdef"])
+        asc_string = string_noise.augment_string(input_string, mapping, 1.0, sort_order=ASCENDING)
+        desc_string = string_noise.augment_string(input_string, mapping, 1.0, sort_order=DESCENDING)
+        self.assertEqual(asc_string, "txdef")
+        self.assertEqual(desc_string, "tyzdef")
 
     def test_single_replacement(self):
         mapping = {"o": ["u"], "oo": ["ue"]}
@@ -132,15 +135,15 @@ class TestStringNoise(unittest.TestCase):
             string_noise.augment_string("1234", mapping, 1.0)
 
     def test_weighted_replacement(self):
-        input_string = "ab"
-        mapping = {"a": {"@": 0.5, "4": 0.5}, "b": {"6": 1.0}}
+        input_string = "abaaaaaaaaaaaaaaaaaa"
+        mapping = {"a": {"@": 0.5, "4": 0.5}, "aa": {"g":0.7, "c": 0.3}, "b": {"6": 1.0}}
         probability = 1.0
 
         result = string_noise.augment_string(
-            input_string, mapping, probability, debug=False
+            input_string, mapping, probability, debug=False, seed=self.seed, sort_order=RESHUFFLE
         )
-        # Check if all characters are replaced
-        self.assertTrue(all(c in {"@", "4", "6"} for c in result))
+        # Expected result based on the seed
+        self.assertEqual(result, "@6@gc4c4g44gg4")
 
     def test_uniform_replacement(self):
         input_string = "abc"
