@@ -1,9 +1,20 @@
 #include <Python.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
+// Define constants for sort order
+#define SHUFFLE 0
+#define ASCENDING 1
+#define DESCENDING 2
+#define RESHUFFLE 3
 
+static int compare_pyobject_ascending(const void *a, const void *b) {
+    return PyObject_RichCompareBool(*(PyObject**)a, *(PyObject**)b, Py_LT);
+}
+
+static int compare_pyobject_descending(const void *a, const void *b) {
+    return PyObject_RichCompareBool(*(PyObject**)a, *(PyObject**)b, Py_GT);
+}
 
 // Shuffle an array of PyObject pointers
 static void shuffle_pyobject_array(PyObject** array, Py_ssize_t n) {
@@ -15,31 +26,35 @@ static void shuffle_pyobject_array(PyObject** array, Py_ssize_t n) {
     }
 }
 
-
 // Function to parse input arguments
-static PyObject* parse_arguments(PyObject* args, PyObject* kwds, PyObject** input_string, PyObject** replacement_mapping, double* probability, int* debug) {
+static int parse_arguments(PyObject* args, PyObject* kwds, PyObject** input_string, PyObject** replacement_mapping, double* probability, int* debug, int* sort_order) {
     PyObject* debug_obj = NULL;
-    static char* kwlist[] = {"input_string", "replacement_mapping", "probability", "debug", NULL};
+    static char* kwlist[] = {"input_string", "replacement_mapping", "probability", "debug", "sort_order", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!d|O", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!d|Oi", kwlist,
                                      input_string,
                                      &PyDict_Type, replacement_mapping,
                                      probability,
-                                     &debug_obj)) {
-        return NULL;
+                                     &debug_obj,
+                                     sort_order)) {
+        PyErr_SetString(PyExc_TypeError, "Invalid arguments: expected (string, dict, double, optional bool, optional int)");
+        return 0;
     }
 
     if (*probability < 0.0 || *probability > 1.0) {
         PyErr_SetString(PyExc_ValueError, "Probability must be between 0 and 1");
-        return NULL;
+        return 0;
     }
 
     if (debug_obj && PyObject_IsTrue(debug_obj)) {
         *debug = 1;
+    } else {
+        *debug = 0;
     }
 
-    Py_RETURN_NONE;
+    return 1;
 }
+
 
 static int validate_replacement_mapping(PyObject* replacement_mapping) {
     PyObject *key, *value;
@@ -191,35 +206,54 @@ static PyObject* select_replacement(PyObject* value, int debug) {
 }
 
 
-static PyObject* perform_replacements(PyObject* input_string, PyObject* replacement_mapping, double probability, int debug) {
+// Helper function to free resources
+static void free_resources(PyObject* keys, PyObject** keys_array, Py_ssize_t key_count) {
+    if (keys_array) {
+        for (Py_ssize_t i = 0; i < key_count; i++) {
+            Py_XDECREF(keys_array[i]);
+        }
+        free(keys_array);
+    }
+    Py_XDECREF(keys);
+}
+
+static PyObject* perform_replacements(PyObject* input_string, PyObject* replacement_mapping, double probability, int debug, int sort_order) {
     PyObject *output_string = NULL, *keys = NULL, *normalized_output = NULL;
     PyObject **keys_array = NULL;
-    Py_ssize_t input_len, key_count, output_len = 0, output_capacity;
+    Py_ssize_t input_len, key_count = 0, output_len = 0, output_capacity;
     int error_occurred = 0;
 
-    // Get the length of the input string.
     input_len = PyUnicode_GET_LENGTH(input_string);
-
-    // Allocate the output string buffer.
     output_capacity = input_len;
     output_string = PyUnicode_New(output_capacity, 0x10FFFF);
-    if (!output_string) {
-        PyErr_NoMemory();
-        goto error;
-    }
+    if (!output_string) goto error;
 
-    // Get the keys of the replacement mapping and store them in an array.
     keys = PyDict_Keys(replacement_mapping);
     key_count = PyList_Size(keys);
     keys_array = (PyObject**)malloc(key_count * sizeof(PyObject*));
-    if (!keys_array) {
-        PyErr_NoMemory();
-        goto error;
-    }
+    if (!keys_array) goto error;
 
     for (Py_ssize_t i = 0; i < key_count; i++) {
         keys_array[i] = PyList_GetItem(keys, i);
         Py_INCREF(keys_array[i]);
+    }
+
+    // Sort or shuffle the keys_array based on sort_order
+    if (sort_order == ASCENDING) {
+        if (debug) {
+            printf("SORT ASCENDING...\n");
+        }
+        qsort(keys_array, key_count, sizeof(PyObject*), compare_pyobject_ascending);
+    } else if (sort_order == DESCENDING) {
+        if (debug) {
+            printf("SORT DESCENDING...\n");
+        }
+        qsort(keys_array, key_count, sizeof(PyObject*), compare_pyobject_descending);
+    } else if (sort_order == SHUFFLE) { // SHUFFLE
+        if (debug) {
+            printf("SORT SHUFFLE...\n");
+        }
+        shuffle_pyobject_array(keys_array, key_count);
     }
 
     // Iterate over each character of the input string.
@@ -230,7 +264,12 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
             continue;
         }
 
-        shuffle_pyobject_array(keys_array, key_count);
+        if (sort_order == RESHUFFLE) {
+            if (debug) {
+                printf("SORT RESHUFFLE...\n");
+            }
+            shuffle_pyobject_array(keys_array, key_count);
+        }
         int replaced = 0;
 
         for (Py_ssize_t j = 0; j < key_count; j++) {
@@ -290,68 +329,47 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
         }
     }
 
-    if (error_occurred) {
-        goto error;
-    }
+    if (error_occurred) goto error;
 
-    if (PyUnicode_Resize(&output_string, output_len) < 0) {
-        goto error;
-    }
+    if (PyUnicode_Resize(&output_string, output_len) < 0) goto error;
 
     normalized_output = normalize_string(output_string);
-    if (!normalized_output) {
-        goto error;
-    }
+    if (!normalized_output) goto error;
 
     goto final;
 
 error:
     Py_XDECREF(output_string);
     Py_XDECREF(normalized_output);
-    if (keys_array) {
-        for (Py_ssize_t i = 0; i < key_count; i++) {
-            Py_XDECREF(keys_array[i]);
-        }
-        free(keys_array);
-    }
-    Py_XDECREF(keys);
+    free_resources(keys, keys_array, key_count);
     return NULL;
 
 final:
     Py_DECREF(output_string);
-    if (keys_array) {
-        for (Py_ssize_t i = 0; i < key_count; i++) {
-            Py_DECREF(keys_array[i]);
-        }
-        free(keys_array);
-    }
-    Py_DECREF(keys);
+    free_resources(keys, keys_array, key_count);
     return normalized_output;
 }
 
 
-// Main function to augment string
+
 PyObject* augment_string(PyObject* self, PyObject* args, PyObject* kwds) {
     PyObject *input_string, *replacement_mapping;
     double probability;
-    int debug = 0;
+    int debug = 0, sort_order = RESHUFFLE;
 
-    // Parse arguments
-    if (parse_arguments(args, kwds, &input_string, &replacement_mapping, &probability, &debug) == NULL) {
+    if (!parse_arguments(args, kwds, &input_string, &replacement_mapping, &probability, &debug, &sort_order)) {
         return NULL;
     }
 
-    // Validate replacement mapping
     if (!validate_replacement_mapping(replacement_mapping)) {
         return NULL;
     }
 
-    // Perform replacements
-    PyObject *output_string = perform_replacements(input_string, replacement_mapping, probability, debug);
+    PyObject *output_string = perform_replacements(input_string, replacement_mapping, probability, debug, sort_order);
     if (!output_string) {
+        PyErr_SetString(PyExc_RuntimeError, "String augmentation failed.");
         return NULL;
     }
 
     return output_string;
 }
-
