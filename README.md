@@ -1,5 +1,5 @@
 # string-noise
-Add noise to Python strings using various augmentation styles with the `string-noise` package. This package offers an N:M character-sequence mapping with probabilistic and weighted replacements, implemented in C for fast processing. It's ideal for realistic synthetic error production, particularly useful in string augmentation for training machine learning models.
+Add noise to Python strings using various augmentation styles with the `string-noise` package. This package offers an N:M character-sequence mapping with probabilistic and weighted replacements, implemented in C for fast processing. It's ideal for generating synthetic error production, particularly useful in string augmentation in the loop while training machine learning models.
 
 ## Table of Contents
 1. [Getting Started](#getting-started)
