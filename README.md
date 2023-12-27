@@ -50,10 +50,6 @@ These methods apply predefined noise patterns based on various styles:
 
 #### `ocr`
 Mimics OCR-related noise, based on the analysis of common OCR errors. Example usage:
-```python
-result = noise.ocr("Example text", probability=0.3, seed=42)
-print(result)  # Output with OCR-style noise
-```
 
 #### `basic_ocr`
 A simplified version of OCR noise, faster, suitable for less complex noise requirements. Example usage:
