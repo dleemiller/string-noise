@@ -1,3 +1,140 @@
 from .mappings import *
-from .string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING
+from .string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING, random_replacement
 
+import string
+
+
+class LazyNoise:
+    """
+    Implements various types of string noise augmentation including mapped and random noise.
+
+    This class provides a suite of methods for augmenting strings by introducing noise.
+    It includes predefined mappings for OCR-style noise, leet speak, keyboard errors, homoglyphs,
+    and phonetic replacements, as well as a method for random character replacement.
+
+    The class is inspired by the OCR noise analysis in the following paper:
+    Nguyen, T.-T.-H., Jatowt, A., Coustaty, M., Nguyen, N.-V., & Doucet, A. (2020).
+    Deep Statistical Analysis of OCR Errors for Effective Post-OCR Processing.
+    In Proceedings of the 18th Joint Conference on Digital Libraries (pp. 29–38).
+    IEEE Press. https://doi.org/10.1109/JCDL.2019.00015
+
+    Available Methods:
+    - random: Introduces random noise into the string.
+    - ocr: Mimics OCR-related noise.
+    - basic_ocr: A simplified version of OCR noise.
+    - leet: Replaces characters with visually similar numbers or symbols (leet speak).
+    - keyboard: Simulates typing errors based on keyboard layout.
+    - homoglyph: Substitutes characters with visually similar glyphs.
+    - phonetic: Applies phonetic-based character substitutions.
+
+    Each method can be called directly from an instance of LazyNoise. For example:
+    >>> from string_noise import noise, RESHUFFLE
+    >>> noise.ocr("Example text", probability=0.9, sort_order=RESHUFFLE, seed=43)
+    """
+
+    @property
+    def ocr(self):
+        """
+        Loads and returns a mapping for OCR-style noise augmentation.
+        """
+        if not hasattr(self, "__ocr"):
+            self.__ocr = load_nguyen_ocr()
+        return self.__ocr
+
+    @property
+    def basic_ocr(self):
+        """
+        Loads and returns a basic mapping for OCR-style noise augmentation.
+        """
+        if not hasattr(self, "__basic_ocr"):
+            self.__basic_ocr = load_llm_ocr()
+        return self.__basic_ocr
+
+    @property
+    def leet(self):
+        """
+        Loads and returns a mapping for leet speak-style noise augmentation.
+        """
+        if not hasattr(self, "__leet"):
+            self.__leet = load_leet()
+        return self.__leet
+
+    @property
+    def keyboard(self):
+        """
+        Loads and returns a mapping for keyboard-style noise augmentation.
+        """
+        if not hasattr(self, "__keyboard"):
+            self.__keyboard = load_keyboard()
+        return self.__keyboard
+
+    @property
+    def homoglyph(self):
+        """
+        Loads and returns a mapping for homoglyph-style noise augmentation.
+        """
+        if not hasattr(self, "__homoglyph"):
+            self.__homoglyph = load_homoglyph()
+        return self.__homoglyph
+
+    @property
+    def phonetic(self):
+        """
+        Loads and returns a mapping for phonetic-style noise augmentation.
+        """
+        if not hasattr(self, "__phonetic"):
+            self.__phonetic = load_phonetic()
+        return self.__phonetic
+
+    @staticmethod
+    def random(
+        original_string: str,
+        charset: str = string.ascii_letters + string.digits,
+        min_chars_in: int = 1,
+        max_chars_in: int = 2,
+        min_chars_out: int = 1,
+        max_chars_out: int = 2,
+        probability: float = 0.1,
+        seed: int = -1,
+        debug: bool = False,
+    ):
+        """
+        Randomly replaces characters in a string with characters from a given charset.
+
+        Parameters:
+        - original_string (str): The string to which the random replacements are to be applied.
+        - charset (str, optional): Characters to use as replacements. Defaults to ascii letters and digits.
+        - min_chars_in (int, optional): Minimum number of consecutive characters to be considered for replacement. Defaults to 1.
+        - max_chars_in (int, optional): Maximum number of consecutive characters to be considered for replacement. Defaults to 2.
+        - min_chars_out (int, optional): Minimum number of replacement characters. Defaults to 1.
+        - max_chars_out (int, optional): Maximum number of replacement characters. Defaults to 2.
+        - probability (float, optional): Probability of any character being replaced (0-1). Defaults to 0.1.
+        - seed (int, optional): Seed for the random number generator, -1 for random. Defaults to -1.
+        - debug (bool, optional): Enables debug output if set to True. Defaults to False.
+
+        Returns:
+        - (str): A new string with random replacements applied.
+
+        Raises:
+        - ValueError: If input parameters are invalid.
+
+        Examples:
+        >>> noise.random(original_string="hello world", charset="abc", probability=0.5, seed=42)
+        'abcaaa woacd'
+        >>> noise.random(original_string="test", charset="xyz", probability=1, seed=123)
+        'xxyy'
+        """
+        return random_replacement(
+            original_string,
+            charset,
+            min_chars_in=min_chars_in,
+            max_chars_in=max_chars_in,
+            min_chars_out=min_chars_out,
+            max_chars_out=max_chars_out,
+            probability=probability,
+            seed=seed,
+            debug=debug,
+        )
+
+
+noise = LazyNoise()

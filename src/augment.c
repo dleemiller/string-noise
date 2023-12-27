@@ -26,18 +26,20 @@ static void shuffle_pyobject_array(PyObject** array, Py_ssize_t n) {
     }
 }
 
+
 static int parse_arguments(PyObject* args, PyObject* kwds, PyObject** input_string, PyObject** replacement_mapping, double* probability, int* debug, int* sort_order, int* seed) {
     PyObject* debug_obj = NULL;
+    *probability = 1.0;
     static char* kwlist[] = {"input_string", "replacement_mapping", "probability", "debug", "sort_order", "seed", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!d|Oii", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!|dOii", kwlist,
                                      input_string,
                                      &PyDict_Type, replacement_mapping,
                                      probability,
                                      &debug_obj,
                                      sort_order,
                                      seed)) {
-        PyErr_SetString(PyExc_TypeError, "Invalid arguments: expected (string, dict, float, optional bool, optional int, optional int for seed)");
+        PyErr_SetString(PyExc_TypeError, "Invalid arguments: expected (string, dict, optional float, optional bool, optional int, optional int for seed)");
         return 0;
     }
 

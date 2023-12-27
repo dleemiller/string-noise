@@ -3,6 +3,17 @@
 #include <string.h>
 #include <time.h>
 
+
+int process_chars_in(char *original_string, size_t start, int chars_in) {
+    for (int j = 0; j < chars_in; ++j) {
+        if (isspace((unsigned char)original_string[start + j])) {
+            return j; // Return the new length up to the whitespace character
+        }
+    }
+    return chars_in; // Return the original length if no whitespace is encountered
+}
+
+
 PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
     char *original_string;
     char *charset;
@@ -61,6 +72,14 @@ PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
         if (debug) {
             printf("Processing character %c at index %zu\n", original_string[i], i);
         }
+        char current_char = original_string[i];
+
+        // Check if the current character is a whitespace
+        if (isspace((unsigned char)current_char)) {
+            new_string[new_index++] = current_char;
+            i++;
+            continue;
+        }
     
         if ((double)rand() / RAND_MAX > probability) {
             new_string[new_index++] = original_string[i++];
@@ -69,7 +88,10 @@ PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
     
         int chars_in = min_chars_in + (rand() % (max_chars_in - min_chars_in + 1));
         int chars_out = min_chars_out + (rand() % (max_chars_out - min_chars_out + 1));
-    
+
+        // Recursively adjust chars_in if whitespace is encountered
+        chars_in = process_chars_in(original_string, i, chars_in);
+
         if (chars_in == 0) {
             new_string[new_index++] = original_string[i];
         }
@@ -77,7 +99,7 @@ PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
         for (int j = 0; j < chars_out; ++j) {
             new_string[new_index++] = charset[rand() % charset_len];
         }
-    
+
         if (debug) {
             printf("chars_in: %d, chars_out: %d\n", chars_in, chars_out);
         }
