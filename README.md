@@ -13,6 +13,7 @@ Add noise to Python strings using various augmentation styles with the `string-n
 ### Installation
 To install the package, use the following command:
 ```bash
+python setup.py build
 python setup.py install
 ```
 Ensure you have Python 3.x installed on your system.
