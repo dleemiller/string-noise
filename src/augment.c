@@ -274,6 +274,20 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
 
         for (Py_ssize_t j = 0; j < key_count; j++) {
             PyObject *key = keys_array[j];
+            if (debug) {
+                PyObject *key_repr = PyObject_Str(key);  // Convert the PyObject to a string representation
+                if (key_repr != NULL) {
+                    const char *key_cstr = PyUnicode_AsUTF8(key_repr);  // Convert the Python string to a C string
+                    if (key_cstr != NULL) {
+                        printf("Key: %s\n", key_cstr);
+                    } else {
+                        PyErr_Print();  // Handle potential error in conversion
+                    }
+                    Py_DECREF(key_repr);  // Clean up the temporary Python string object
+                } else {
+                    PyErr_Print();  // Handle potential error in conversion
+                }
+            }
             PyObject *value = PyDict_GetItem(replacement_mapping, key);
             Py_ssize_t key_len = PyUnicode_GET_LENGTH(key);
 
