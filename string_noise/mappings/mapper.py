@@ -11,7 +11,7 @@ class Mapper:
             raise ValueError("Invalid JSON structure")
 
     @property
-    def data(self):
+    def map(self):
         return self._json_data
 
     @staticmethod
@@ -34,13 +34,30 @@ class Mapper:
 
     @classmethod
     def load(cls, resource_package, resource_path):
-        with importlib.resources.open_text(resource_package, resource_path) as file:
-            json_data = json.load(file)
-            return cls(json_data)
+        if resource_package is None:
+            assert os.path.exists(resource_path)
+            with open(resource_path, "r") as file:
+                json_data = json.load(file)
+        else:
+            # Use importlib.resources.files() to access the resource
+            resource = importlib.resources.files(resource_package) / resource_path
+            with resource.open("r") as file:
+                json_data = json.load(file)
+        return cls(json_data)
 
     def __call__(
-        self, text: str, probability: float, sort_order=ASCENDING, debug=False, seed=None
+        self,
+        text: str,
+        probability: float = 1.0,
+        sort_order=ASCENDING,
+        debug=False,
+        seed=None,
     ):
         return augment_string(
-            text, self.data, probability, debug=debug, sort_order=sort_order, seed=-1 if seed is None else seed
+            text,
+            self.map,
+            probability=probability,
+            debug=debug,
+            sort_order=sort_order,
+            seed=-1 if seed is None else seed,
         )

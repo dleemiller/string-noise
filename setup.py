@@ -7,6 +7,7 @@ string_noise_module = Extension(
         "src/string_noise.c",
         "src/normalize.c",
         "src/augment.c",
+        "src/random.c",
     ],
 )
 

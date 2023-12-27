@@ -7,9 +7,12 @@ RESOURCE_PACKAGE = "string_noise.mappings.default"
 
 class CustomMapper:
     @classmethod
-    def new(cls, path):
+    def new(cls, path, resource_package=RESOURCE_PACKAGE):
+        """
+        Set resource_package to `None` for custom local mappings.
+        """
         return functools.partial(
-            Mapper.load, resource_package=RESOURCE_PACKAGE, resource_path=path
+            Mapper.load, resource_package=resource_package, resource_path=path
         )
 
 
