@@ -39,8 +39,8 @@ class Mapper:
             return cls(json_data)
 
     def __call__(
-        self, text: str, probability: float, sort_order=ASCENDING, debug=False
+        self, text: str, probability: float, sort_order=ASCENDING, debug=False, seed=None
     ):
         return augment_string(
-            text, self.data, probability, debug=debug, sort_order=sort_order
+            text, self.data, probability, debug=debug, sort_order=sort_order, seed=-1 if seed is None else seed
         )

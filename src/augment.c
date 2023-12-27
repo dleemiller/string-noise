@@ -26,18 +26,18 @@ static void shuffle_pyobject_array(PyObject** array, Py_ssize_t n) {
     }
 }
 
-// Function to parse input arguments
-static int parse_arguments(PyObject* args, PyObject* kwds, PyObject** input_string, PyObject** replacement_mapping, double* probability, int* debug, int* sort_order) {
+static int parse_arguments(PyObject* args, PyObject* kwds, PyObject** input_string, PyObject** replacement_mapping, double* probability, int* debug, int* sort_order, int* seed) {
     PyObject* debug_obj = NULL;
-    static char* kwlist[] = {"input_string", "replacement_mapping", "probability", "debug", "sort_order", NULL};
+    static char* kwlist[] = {"input_string", "replacement_mapping", "probability", "debug", "sort_order", "seed", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!d|Oi", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "UO!d|Oii", kwlist,
                                      input_string,
                                      &PyDict_Type, replacement_mapping,
                                      probability,
                                      &debug_obj,
-                                     sort_order)) {
-        PyErr_SetString(PyExc_TypeError, "Invalid arguments: expected (string, dict, double, optional bool, optional int)");
+                                     sort_order,
+                                     seed)) {
+        PyErr_SetString(PyExc_TypeError, "Invalid arguments: expected (string, dict, float, optional bool, optional int, optional int for seed)");
         return 0;
     }
 
@@ -351,14 +351,17 @@ final:
 }
 
 
-
 PyObject* augment_string(PyObject* self, PyObject* args, PyObject* kwds) {
     PyObject *input_string, *replacement_mapping;
     double probability;
-    int debug = 0, sort_order = RESHUFFLE;
+    int debug = 0, sort_order = RESHUFFLE, seed = -1; // Add seed parameter with default value -1
 
-    if (!parse_arguments(args, kwds, &input_string, &replacement_mapping, &probability, &debug, &sort_order)) {
+    if (!parse_arguments(args, kwds, &input_string, &replacement_mapping, &probability, &debug, &sort_order, &seed)) {
         return NULL;
+    }
+
+    if (seed != -1) {
+        srand((unsigned int)seed); // Seed the RNG only if a valid seed is provided
     }
 
     if (!validate_replacement_mapping(replacement_mapping)) {
