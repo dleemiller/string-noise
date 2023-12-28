@@ -7,6 +7,46 @@
 #include "utils.h"
 
 
+int validate_args(PyObject *input_string, PyObject *charset, 
+                  int min_chars_in, int max_chars_in, 
+                  int min_chars_out, int max_chars_out, 
+                  double probability, long seed, int debug) {
+
+    // Validate input_string and charset
+    if (!PyUnicode_Check(input_string)) {
+        PyErr_SetString(PyExc_TypeError, "input_string must be a string.");
+        return 0;
+    }
+    if (!PyUnicode_Check(charset)) {
+        PyErr_SetString(PyExc_TypeError, "charset must be a string.");
+        return 0;
+    }
+
+    // Ensure charset is not empty
+    if (PyUnicode_GET_LENGTH(charset) == 0) {
+        PyErr_SetString(PyExc_ValueError, "Charset cannot be empty.");
+        return 0;
+    }
+
+    // Validate min and max chars in/out
+    if (min_chars_in < 0 || max_chars_in < min_chars_in) {
+        PyErr_SetString(PyExc_ValueError, "Invalid min/max chars_in values.");
+        return 0;
+    }
+    if (min_chars_out < 0 || max_chars_out < min_chars_out) {
+        PyErr_SetString(PyExc_ValueError, "Invalid min/max chars_out values.");
+        return 0;
+    }
+
+    // Validate probability
+    if (probability < 0.0 || probability > 1.0) {
+        PyErr_SetString(PyExc_ValueError, "Probability must be between 0 and 1.");
+        return 0;
+    }
+
+    return 1;
+}
+
 PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
     PyObject *input_string, *charset;
     int min_chars_in = 1;
@@ -34,9 +74,9 @@ PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
 
     Py_ssize_t input_len = PyUnicode_GET_LENGTH(input_string);
     Py_ssize_t charset_len = PyUnicode_GET_LENGTH(charset);
-    if (charset_len == 0) {
-        PyErr_SetString(PyExc_ValueError, "Charset cannot be empty.");
-        return NULL;
+    if (!validate_args(input_string, charset, min_chars_in, max_chars_in, 
+                       min_chars_out, max_chars_out, probability, seed, debug)) {
+        return NULL; // Validation failed
     }
 
     const Py_UCS4 max_input_char = PyUnicode_MAX_CHAR_VALUE(input_string);

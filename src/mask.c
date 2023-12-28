@@ -18,6 +18,40 @@ int is_consonant(Py_UCS4 c) {
     return Py_UNICODE_ISALPHA(lower_c) && !is_vowel(lower_c);
 }
 
+int validate_masking_args(PyObject *input_string, double probability, 
+                          int min_consecutive, int max_consecutive, 
+                          Py_UCS4 vowel_mask, Py_UCS4 consonant_mask, 
+                          Py_UCS4 nws_mask, Py_UCS4 general_mask, 
+                          Py_UCS4 two_byte_mask, Py_UCS4 four_byte_mask, 
+                          double general_mask_probability, long seed, int debug) {
+
+    // Validate input_string
+    if (!PyUnicode_Check(input_string)) {
+        PyErr_SetString(PyExc_TypeError, "input_string must be a string.");
+        return 0;
+    }
+
+    // Validate probability
+    if (probability < 0.0 || probability > 1.0) {
+        PyErr_SetString(PyExc_ValueError, "Probability must be between 0 and 1.");
+        return 0;
+    }
+
+    // Validate min and max consecutive characters
+    if (min_consecutive < 0 || max_consecutive < min_consecutive) {
+        PyErr_SetString(PyExc_ValueError, "Invalid min/max consecutive values.");
+        return 0;
+    }
+
+    // Validate general_mask_probability
+    if (general_mask_probability < 0.0 || general_mask_probability > 1.0) {
+        PyErr_SetString(PyExc_ValueError, "General mask probability must be between 0 and 1.");
+        return 0;
+    }
+
+    return 1;
+}
+
 PyObject* random_masking(PyObject *self, PyObject *args, PyObject *keywds) {
     PyObject *input_string;
     double probability = 0.1;
@@ -41,6 +75,14 @@ PyObject* random_masking(PyObject *self, PyObject *args, PyObject *keywds) {
                                      &vowel_mask, &consonant_mask, &nws_mask, &general_mask, 
                                      &two_byte_mask, &four_byte_mask, &general_mask_probability, &seed, &debug)) {
         return NULL;
+    }
+
+    // Perform validation on the arguments
+    if (!validate_masking_args(input_string, probability, min_consecutive, 
+                               max_consecutive, vowel_mask, consonant_mask, 
+                               nws_mask, general_mask, two_byte_mask, 
+                               four_byte_mask, general_mask_probability, seed, debug)) {
+        return NULL; // Error already set in validate_masking_args
     }
 
     // Seed the random number generator

@@ -98,6 +98,25 @@ class RandomReplacementTests(unittest.TestCase):
         self.assertNotEqual(result, original)
         self.assertTrue(all(ch in charset for ch in result))
 
+    def test_random_replacement_invalid_input(self):
+        # Test invalid input_string type
+        with self.assertRaises(TypeError):
+            string_noise.random_replacement(123, "abc")  # input_string should be a string
+
+        # Test invalid charset type
+        with self.assertRaises(TypeError):
+            string_noise.random_replacement("hello", 123)  # charset should be a string
+
+        # Test invalid probability range
+        with self.assertRaises(ValueError):
+            string_noise.random_replacement("hello", "abc", probability=-1)  # probability should be 0-1
+
+        # Test invalid min_chars_in and max_chars_in values
+        with self.assertRaises(ValueError):
+            string_noise.random_replacement("hello", "abc", min_chars_in=-1)  # should be non-negative
+        with self.assertRaises(ValueError):
+            string_noise.random_replacement("hello", "abc", max_chars_in=0)  # should be at least 1
+
 
 if __name__ == "__main__":
     unittest.main()

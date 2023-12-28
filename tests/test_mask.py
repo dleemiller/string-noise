@@ -120,6 +120,25 @@ class TestRandomMasking(unittest.TestCase):
         )
         self.assertTrue(len(results) > 1)  # Expect multiple different results
 
+    def test_random_masking_invalid_input(self):
+        # Test invalid input_string type
+        with self.assertRaises(TypeError):
+            random_masking(123)  # input_string should be a string
+
+        # Test invalid probability range
+        with self.assertRaises(ValueError):
+            random_masking("hello", probability=-1)  # probability should be 0-1
+
+        # Test invalid min_consecutive and max_consecutive values
+        with self.assertRaises(ValueError):
+            random_masking("hello", min_consecutive=-1)  # should be non-negative
+        with self.assertRaises(ValueError):
+            random_masking("hello", max_consecutive=0)  # should be at least 1
+
+        # Test invalid general_mask_probability range
+        with self.assertRaises(ValueError):
+            random_masking("hello", general_mask_probability=-1)  # should be 0-1
+
 
 if __name__ == "__main__":
     unittest.main()
