@@ -296,8 +296,6 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
             PyObject *value = PyDict_GetItem(replacement_mapping, key);
             Py_ssize_t key_len = PyUnicode_GET_LENGTH(key);
 
-            if (i + key_len > input_len) continue;
-
             PyObject *substring = PyUnicode_Substring(input_string, i, i + key_len);
             if (!substring) {
                 error_occurred = 1;
