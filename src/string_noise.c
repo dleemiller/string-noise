@@ -8,7 +8,7 @@ PyObject *AugmentationFailed;
 #include "normalize.h"
 #include "augment.h"
 #include "random.h"
-
+#include "mask.h"
 
 
 // Method definitions
@@ -20,6 +20,7 @@ static PyMethodDef StringNoiseMethods[] = {
     {"normalize", (PyCFunction)normalize, METH_VARARGS | METH_KEYWORDS, "Normalize the values in a dictionary or list"},
     {"random_replacement", (PyCFunction)random_replacement, METH_VARARGS | METH_KEYWORDS,
      "Randomly replace characters in a string."},
+    {"random_masking", (PyCFunction)random_masking, METH_VARARGS | METH_KEYWORDS, "Randomly masks a string."},
     {NULL, NULL, 0, NULL} // Sentinel
 };
 
