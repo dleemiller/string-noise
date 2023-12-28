@@ -4,116 +4,126 @@
 #include <time.h>
 #include <ctype.h>
 
-#include "random.h"
+#include "utils.h"
 
 // Define default control characters
-#define DEFAULT_VOWEL_MASK 0x06     // Example: ACK for vowels
-#define DEFAULT_CONSONANT_MASK 0x07 // Example: BEL for consonants
-#define DEFAULT_NWS_MASK 0x08       // Example: BS for non-whitespace/other
-#define DEFAULT_GENERAL_MASK 0x09   // Example: HT for general mask
+#define DEFAULT_VOWEL_MASK 0x06
+#define DEFAULT_CONSONANT_MASK 0x07
+#define DEFAULT_NWS_MASK 0x08
+#define DEFAULT_GENERAL_MASK 0x09
+#define DEFAULT_2BYTE_MASK 0x0A
+#define DEFAULT_4BYTE_MASK 0x0B
 
-int is_vowel(char c) {
-    // Assuming English vowels
-    char lower_c = tolower(c);
+int is_vowel(Py_UCS4 c) {
+    Py_UCS4 lower_c = Py_UNICODE_TOLOWER(c);
     return (lower_c == 'a' || lower_c == 'e' || lower_c == 'i' || lower_c == 'o' || lower_c == 'u');
 }
 
-int is_consonant(char c) {
-    char lower_c = tolower(c);
-    return isalpha(lower_c) && !is_vowel(lower_c);
+int is_consonant(Py_UCS4 c) {
+    Py_UCS4 lower_c = Py_UNICODE_TOLOWER(c);
+    return Py_UNICODE_ISALPHA(lower_c) && !is_vowel(lower_c);
 }
 
-
-// Main function for random masking with debug flag
 PyObject* random_masking(PyObject *self, PyObject *args, PyObject *keywds) {
-    char *original_string;
+    PyObject *input_string;
     double probability = 0.1;
     int min_consecutive = 1;
     int max_consecutive = 2;
-    char vowel_mask = DEFAULT_VOWEL_MASK;
-    char consonant_mask = DEFAULT_CONSONANT_MASK;
-    char nws_mask = DEFAULT_NWS_MASK;
-    char general_mask = DEFAULT_GENERAL_MASK;
+    Py_UCS4 vowel_mask = DEFAULT_VOWEL_MASK;
+    Py_UCS4 consonant_mask = DEFAULT_CONSONANT_MASK;
+    Py_UCS4 nws_mask = DEFAULT_NWS_MASK;
+    Py_UCS4 general_mask = DEFAULT_GENERAL_MASK;
+    Py_UCS4 two_byte_mask = DEFAULT_2BYTE_MASK;
+    Py_UCS4 four_byte_mask = DEFAULT_4BYTE_MASK;
     double general_mask_probability = 0.5;
     long seed = -1;
     int debug = 0;
-    static char *kwlist[] = {"original_string", "probability", "min_consecutive", "max_consecutive",
-                             "vowel_mask", "consonant_mask", "nws_mask", "general_mask", "general_mask_probability", "seed", "debug", NULL};
+    static char *kwlist[] = {"input_string", "probability", "min_consecutive", "max_consecutive",
+                             "vowel_mask", "consonant_mask", "nws_mask", "general_mask", "two_byte_mask", 
+                             "four_byte_mask", "general_mask_probability", "seed", "debug", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|diiccccdli", kwlist, &original_string,
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "U|diIIIIIIIdli", kwlist, &input_string,
                                      &probability, &min_consecutive, &max_consecutive, 
-                                     &vowel_mask, &consonant_mask, &nws_mask, &general_mask, &general_mask_probability, &seed, &debug)) {
+                                     &vowel_mask, &consonant_mask, &nws_mask, &general_mask, 
+                                     &two_byte_mask, &four_byte_mask, &general_mask_probability, &seed, &debug)) {
         return NULL;
     }
 
     // Seed the random number generator
     if (seed == -1) {
-        srand((unsigned int)time(NULL));
+        srand((unsigned int)clock());
     } else {
         srand((unsigned int)seed);
     }
 
-    size_t original_len = strlen(original_string);
-    char *new_string = malloc(original_len + 1);
-    if (!new_string) {
+    Py_ssize_t input_len = PyUnicode_GET_LENGTH(input_string);
+    const Py_ssize_t buffer_margin = 64;
+
+    // Use the utility function to get aligned size
+    Py_ssize_t aligned_input_len = get_aligned_size(input_len);
+
+    PyObject *output_string = PyUnicode_New(aligned_input_len, PyUnicode_MAX_CHAR_VALUE(input_string));
+    if (!output_string) {
         PyErr_NoMemory();
         return NULL;
     }
 
-    if (debug) {
-        printf("Debug: Original string: %s\n", original_string);
-    }
+    Py_ssize_t output_len = 0;
+    for (Py_ssize_t i = 0; i < input_len;) {
+        Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, i);
+        int remaining_length = input_len - i;
 
-    size_t new_index = 0;
-    for (size_t i = 0; i < original_len;) {
-        // Check if the current character is whitespace and handle it
-        if (isspace((unsigned char)original_string[i])) {
-            new_string[new_index++] = original_string[i++];
+        if (Py_UNICODE_ISSPACE(ch)) {
+            if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
+                Py_DECREF(output_string);
+                return PyErr_NoMemory();
+            }
+            i++;
             continue;
         }
-    
-        // Apply masking logic to non-whitespace characters
+
+        if (remaining_length < min_consecutive) {
+            if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
+                Py_DECREF(output_string);
+                return PyErr_NoMemory();
+            }
+            i++;
+            continue;
+        }
+
+        int chars_to_mask = min_consecutive + (rand() % (max_consecutive - min_consecutive + 1));
+        chars_to_mask = (chars_to_mask > remaining_length) ? remaining_length : chars_to_mask;
+
         if ((double)rand() / RAND_MAX < probability) {
-            int chars_in = min_consecutive + (rand() % (max_consecutive - min_consecutive + 1));
-            chars_in = process_chars_in(original_string, i, chars_in);
-    
-            if (debug) {
-                printf("Debug: Masking %d characters starting at index %zu\n", chars_in, i);
-            }
-    
-            for (int j = 0; j < chars_in && i + j < original_len; ++j) {
-                char mask_char = ((double)rand() / RAND_MAX < general_mask_probability) ? general_mask : nws_mask;
-    
-                if (mask_char != general_mask) {
-                    if (is_vowel(original_string[i + j])) {
-                        mask_char = vowel_mask;
-                    } else if (is_consonant(original_string[i + j])) {
-                        mask_char = consonant_mask;
-                    } else {
-                        mask_char = nws_mask;
-                    }
+            for (int j = 0; j < chars_to_mask; ++j) {
+                ch = PyUnicode_READ_CHAR(input_string, i + j);
+                Py_UCS4 mask_char = nws_mask;
+
+                if ((ch & 0xE0) == 0xC0) mask_char = two_byte_mask;
+                else if ((ch & 0xF0) == 0xE0 || (ch & 0xF8) == 0xF0) mask_char = four_byte_mask;
+                else if (is_vowel(ch) || is_consonant(ch)) mask_char = ((double)rand() / RAND_MAX < general_mask_probability) ? general_mask : (is_vowel(ch) ? vowel_mask : consonant_mask);
+
+                if (!write_char_to_output(&output_string, &output_len, mask_char, buffer_margin, debug)) {
+                    Py_DECREF(output_string);
+                    return PyErr_NoMemory();
                 }
-    
-                if (debug) {
-                    printf("Debug: Applying mask '%c' at index %zu\n", mask_char, new_index);
-                }
-    
-                new_string[new_index++] = mask_char;
             }
-    
-            i += chars_in;
+            i += chars_to_mask;
         } else {
-            new_string[new_index++] = original_string[i++];
+            if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
+                Py_DECREF(output_string);
+                return PyErr_NoMemory();
+            }
+            i++;
         }
     }
-    new_string[new_index] = '\0';
 
-    if (debug) {
-        printf("Debug: Final masked string: %s\n", new_string);
+    // Resize output string to match output_len
+    if (PyUnicode_Resize(&output_string, output_len) < 0) {
+        Py_DECREF(output_string);
+        return PyErr_NoMemory();
     }
 
-    PyObject *result = Py_BuildValue("s", new_string);
-    free(new_string);
-    return result;
+    return output_string;
 }
 

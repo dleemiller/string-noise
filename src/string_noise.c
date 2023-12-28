@@ -5,6 +5,7 @@
 
 PyObject *AugmentationFailed;
 
+#include "utils.h"
 #include "normalize.h"
 #include "augment.h"
 #include "random.h"

@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "utils.h"
+
 // Define constants for sort order
 #define SHUFFLE 0
 #define ASCENDING 1
@@ -220,14 +222,18 @@ static void free_resources(PyObject* keys, PyObject** keys_array, Py_ssize_t key
 }
 
 static PyObject* perform_replacements(PyObject* input_string, PyObject* replacement_mapping, double probability, int debug, int sort_order) {
-    PyObject *output_string = NULL, *keys = NULL, *normalized_output = NULL;
+    PyObject *keys = NULL, *normalized_output = NULL;
     PyObject **keys_array = NULL;
-    Py_ssize_t input_len, key_count = 0, output_len = 0, output_capacity;
+    Py_ssize_t key_count = 0, output_len = 0;
     int error_occurred = 0;
 
-    input_len = PyUnicode_GET_LENGTH(input_string);
-    output_capacity = input_len;
-    output_string = PyUnicode_New(output_capacity, 0x10FFFF);
+    Py_ssize_t input_len = PyUnicode_GET_LENGTH(input_string);
+    const Py_ssize_t buffer_margin = 64;
+
+    // Use the utility function to get aligned size
+    Py_ssize_t aligned_input_len = get_aligned_size(input_len);
+
+    PyObject *output_string = PyUnicode_New(aligned_input_len, 0x10FFFF);
     if (!output_string) goto error;
 
     keys = PyDict_Keys(replacement_mapping);
@@ -258,14 +264,14 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
         shuffle_pyobject_array(keys_array, key_count);
     }
 
-    // Iterate over each character of the input string.
     for (Py_ssize_t i = 0; i < input_len; i++) {
         if ((double)rand() / RAND_MAX > probability) {
             Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, i);
-            PyUnicode_WRITE(PyUnicode_KIND(output_string), PyUnicode_DATA(output_string), output_len++, ch);
+            if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
+                goto error;
+            }
             continue;
         }
-
         if (sort_order == RESHUFFLE) {
             if (debug) {
                 printf("SORT RESHUFFLE...\n");
@@ -290,6 +296,7 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
                     PyErr_Print();  // Handle potential error in conversion
                 }
             }
+
             PyObject *value = PyDict_GetItem(replacement_mapping, key);
             Py_ssize_t key_len = PyUnicode_GET_LENGTH(key);
 
@@ -312,20 +319,13 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
                 }
 
                 Py_ssize_t repl_len = PyUnicode_GET_LENGTH(replacement);
-                if (output_len + repl_len + 128 >= output_capacity) {
-                    output_capacity = output_len + repl_len + 128;
-                    if (PyUnicode_Resize(&output_string, output_capacity) < 0) {
+
+                for (Py_ssize_t k = 0; k < repl_len; k++) {
+                    Py_UCS4 ch = PyUnicode_READ_CHAR(replacement, k);
+                    if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
                         Py_DECREF(replacement);
                         goto error;
                     }
-                }
-                // Debug print: Print the current size and capacity of output_string
-                if (debug) {
-                    printf("Current size of output_string: %zd, Current output_capacity: %zd\n", output_len, output_capacity);
-                }
-                for (Py_ssize_t k = 0; k < repl_len; k++) {
-                    Py_UCS4 ch = PyUnicode_READ_CHAR(replacement, k);
-                    PyUnicode_WRITE(PyUnicode_KIND(output_string), PyUnicode_DATA(output_string), output_len++, ch);
                 }
 
                 Py_DECREF(replacement);
@@ -335,19 +335,29 @@ static PyObject* perform_replacements(PyObject* input_string, PyObject* replacem
             }
         }
 
-        if (error_occurred) {
-            break;
-        }
+        if (error_occurred) break;
 
         if (!replaced) {
             Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, i);
-            PyUnicode_WRITE(PyUnicode_KIND(output_string), PyUnicode_DATA(output_string), output_len++, ch);
+            if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
+                goto error;
+            }
         }
     }
 
     if (error_occurred) goto error;
 
-    if (PyUnicode_Resize(&output_string, output_len) < 0) goto error;
+    // Debug print: Final output string length and contents
+    if (debug && output_string) {
+        printf("Debug: Final output string length: %zd\n", PyUnicode_GET_LENGTH(output_string));
+        printf("Debug: Final output string: %s\n", PyUnicode_AsUTF8(output_string));
+    }
+
+    // Resize output string to match output_len
+    if (PyUnicode_Resize(&output_string, output_len) < 0) {
+        Py_DECREF(output_string);
+        return PyErr_NoMemory();
+    }
 
     normalized_output = normalize_string(output_string);
     if (!normalized_output) goto error;
@@ -361,11 +371,10 @@ error:
     return NULL;
 
 final:
-    Py_DECREF(output_string);
+    Py_XDECREF(output_string);
     free_resources(keys, keys_array, key_count);
     return normalized_output;
 }
-
 
 PyObject* augment_string(PyObject* self, PyObject* args, PyObject* kwds) {
     PyObject *input_string, *replacement_mapping;
@@ -376,8 +385,11 @@ PyObject* augment_string(PyObject* self, PyObject* args, PyObject* kwds) {
         return NULL;
     }
 
-    if (seed != -1) {
-        srand((unsigned int)seed); // Seed the RNG only if a valid seed is provided
+    // Seed the random number generator
+    if (seed == -1) {
+        srand((unsigned int)clock());
+    } else {
+        srand((unsigned int)seed);
     }
 
     if (!validate_replacement_mapping(replacement_mapping)) {
