@@ -3,6 +3,7 @@ import json
 from string_noise.mappings import Mapper
 from unittest.mock import patch, mock_open
 
+
 class TestMapper(unittest.TestCase):
     @patch("importlib.resources.files")
     def test_list_values_json(self, mock_files):
@@ -39,6 +40,6 @@ class TestMapper(unittest.TestCase):
         with self.assertRaises(json.decoder.JSONDecodeError):
             Mapper.load("dummy_package", "dummy_path")
 
+
 if __name__ == "__main__":
     unittest.main()
-

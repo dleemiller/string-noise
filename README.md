@@ -86,6 +86,32 @@ result = noise.homoglyph("Hello world", probability=0.3, seed=42, sort_order=SHU
 print(result)  # Output with specified parameters
 ```
 
+### 3. `mask`
+Apply random masking to a string, selectively replacing characters based on their type (vowel, consonant, etc.) and Unicode byte size.
+
+- `input_string (str)`: The string to apply masking to.
+- `probability (float)`: Optional; probability of each character being masked (0-1) (default: 0.1).
+- `min_consecutive (int)`: Optional; minimum number of consecutive characters to consider for masking (default: 1).
+- `max_consecutive (int)`: Optional; maximum number of consecutive characters to consider for masking (default: 2).
+- `vowel_mask (int)`: Optional; mask value for vowels (default: 0x06).
+- `consonant_mask (int)`: Optional; mask value for consonants (default: 0x07).
+- `nws_mask (int)`: Optional; mask value for non-whitespace characters (default: 0x08).
+- `general_mask (int)`: Optional; general mask value for characters (default: 0x09).
+- `two_byte_mask (int)`: Optional; mask value for 2-byte Unicode characters (default: 0x0A).
+- `four_byte_mask (int)`: Optional; mask value for 4-byte Unicode characters (default: 0x0B).
+- `general_mask_probability (float)`: Optional; probability of using the general mask instead of specific masks (0-1) (default: 0.5).
+- `seed (int)`: Optional; seed for the random number generator, -1 for random (default: -1).
+- `debug (bool)`: Optional; enables debug output if set to True (default: False).
+
+Example usage:
+```python
+from string_noise import noise
+
+# Applying random masking to a string
+masked_result = noise.mask("Hello world!", probability=0.5, seed=42)
+print(masked_result)  # Output might be 'H\x06\x07l\x06 \x09\x07rld!', depending on the random seed
+```
+
 ## Contributing
 Contributions to `string-noise` are welcome! Please refer to the project's issues and pull request sections on [GitHub](https://github.com/your-repository-url).
 

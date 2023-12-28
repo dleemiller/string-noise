@@ -3,6 +3,7 @@ import unittest
 from string_noise import string_noise
 from string_noise.string_noise import SHUFFLE, ASCENDING, DESCENDING, RESHUFFLE
 
+
 class TestStringNoise(unittest.TestCase):
     def setUp(self):
         # Set a fixed seed for reproducibility
@@ -12,21 +13,32 @@ class TestStringNoise(unittest.TestCase):
         mapping = {"a": ["e"], "e": ["i"], "o": ["u"]}
         input_string = "hello world"
         augmented_string = string_noise.augment_string(
-            input_string, mapping, 1.0, debug=False, sort_order=ASCENDING, seed=self.seed
+            input_string,
+            mapping,
+            1.0,
+            debug=False,
+            sort_order=ASCENDING,
+            seed=self.seed,
         )
         # Expected output based on the fixed seed
         self.assertEqual(augmented_string, "hillu wurld")
 
         # Test with probability 0
         input_string = "hello world"
-        augmented_string = string_noise.augment_string(input_string, mapping, 0.0, seed=self.seed)
+        augmented_string = string_noise.augment_string(
+            input_string, mapping, 0.0, seed=self.seed
+        )
         self.assertEqual(input_string, augmented_string)  # Should not change
 
     def test_multi_character_sequences(self):
         mapping = {"abc": ["x"], "a": ["y"], "bc": ["z"]}
         input_string = "tabcdef"
-        asc_string = string_noise.augment_string(input_string, mapping, 1.0, sort_order=ASCENDING)
-        desc_string = string_noise.augment_string(input_string, mapping, 1.0, sort_order=DESCENDING)
+        asc_string = string_noise.augment_string(
+            input_string, mapping, 1.0, sort_order=ASCENDING
+        )
+        desc_string = string_noise.augment_string(
+            input_string, mapping, 1.0, sort_order=DESCENDING
+        )
         self.assertEqual(asc_string, "txdef")
         self.assertEqual(desc_string, "tyzdef")
 
@@ -136,11 +148,20 @@ class TestStringNoise(unittest.TestCase):
 
     def test_weighted_replacement(self):
         input_string = "abaaaaaaaaaaaaaaaaaa"
-        mapping = {"a": {"@": 0.5, "4": 0.5}, "aa": {"g":0.7, "c": 0.3}, "b": {"6": 1.0}}
+        mapping = {
+            "a": {"@": 0.5, "4": 0.5},
+            "aa": {"g": 0.7, "c": 0.3},
+            "b": {"6": 1.0},
+        }
         probability = 1.0
 
         result = string_noise.augment_string(
-            input_string, mapping, probability, debug=False, seed=self.seed, sort_order=RESHUFFLE
+            input_string,
+            mapping,
+            probability,
+            debug=False,
+            seed=self.seed,
+            sort_order=RESHUFFLE,
         )
         # Expected result based on the seed
         self.assertEqual(result, "@6@gc4c4g44gg4")

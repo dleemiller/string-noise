@@ -5,10 +5,12 @@
 
 PyObject *AugmentationFailed;
 
+#include "constants.h"
+#include "utils.h"
 #include "normalize.h"
 #include "augment.h"
 #include "random.h"
-
+#include "mask.h"
 
 
 // Method definitions
@@ -20,6 +22,7 @@ static PyMethodDef StringNoiseMethods[] = {
     {"normalize", (PyCFunction)normalize, METH_VARARGS | METH_KEYWORDS, "Normalize the values in a dictionary or list"},
     {"random_replacement", (PyCFunction)random_replacement, METH_VARARGS | METH_KEYWORDS,
      "Randomly replace characters in a string."},
+    {"random_masking", (PyCFunction)random_masking, METH_VARARGS | METH_KEYWORDS, "Randomly masks a string."},
     {NULL, NULL, 0, NULL} // Sentinel
 };
 
@@ -44,6 +47,13 @@ PyMODINIT_FUNC PyInit_string_noise(void) {
     PyModule_AddIntConstant(module, "ASCENDING", 1);
     PyModule_AddIntConstant(module, "DESCENDING", 2);
     PyModule_AddIntConstant(module, "RESHUFFLE", 3);
+    PyModule_AddIntConstant(module, "DEFAULT_VOWEL_MASK", DEFAULT_VOWEL_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_CONSONANT_MASK", DEFAULT_CONSONANT_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_GENERAL_MASK", DEFAULT_GENERAL_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_NWS_MASK", DEFAULT_NWS_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_2BYTE_MASK", DEFAULT_2BYTE_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_4BYTE_MASK", DEFAULT_4BYTE_MASK);
+
 
     srand((unsigned int)time(NULL));  // Seed the random number generator
 

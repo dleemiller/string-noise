@@ -1,6 +1,20 @@
 from .mappings import *
-from .string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING, random_replacement
-
+from .string_noise import (
+    SHUFFLE,
+    RESHUFFLE,
+    ASCENDING,
+    DESCENDING,
+    random_replacement,
+    random_masking,
+)
+from .string_noise import (
+    DEFAULT_VOWEL_MASK,
+    DEFAULT_CONSONANT_MASK,
+    DEFAULT_NWS_MASK,
+    DEFAULT_GENERAL_MASK,
+    DEFAULT_2BYTE_MASK,
+    DEFAULT_4BYTE_MASK,
+)
 import string
 
 
@@ -132,6 +146,68 @@ class LazyNoise:
             min_chars_out=min_chars_out,
             max_chars_out=max_chars_out,
             probability=probability,
+            seed=seed,
+            debug=debug,
+        )
+
+    @staticmethod
+    def mask(
+        original_string: str,
+        probability: float = 0.1,
+        min_consecutive: int = 1,
+        max_consecutive: int = 1,
+        vowel_mask: int = DEFAULT_VOWEL_MASK,
+        consonant_mask: int = DEFAULT_CONSONANT_MASK,
+        nws_mask: int = DEFAULT_NWS_MASK,
+        general_mask: int = DEFAULT_GENERAL_MASK,
+        two_byte_mask: int = DEFAULT_2BYTE_MASK,
+        four_byte_mask: int = DEFAULT_4BYTE_MASK,
+        general_mask_probability: float = 0.5,
+        seed: int = -1,
+        debug: bool = False,
+    ):
+        """
+        Applies random masking to a string based on character properties and Unicode byte size.
+
+        Parameters:
+        - original_string (str): The string to which the masking is to be applied.
+        - probability (float, optional): Probability of each character being masked (0-1). Defaults to 0.1.
+        - min_consecutive (int, optional): Minimum number of consecutive characters to consider for masking. Defaults to 1.
+        - max_consecutive (int, optional): Maximum number of consecutive characters to consider for masking. Defaults to 2.
+        - vowel_mask (int, optional): Mask value for vowels. Defaults to 0x06.
+        - consonant_mask (int, optional): Mask value for consonants. Defaults to 0x07.
+        - nws_mask (int, optional): Mask value for non-whitespace characters. Defaults to 0x08.
+        - general_mask (int, optional): General mask value for characters. Defaults to 0x09.
+        - two_byte_mask (int, optional): Mask value for 2-byte Unicode characters. Defaults to 0x0A.
+        - four_byte_mask (int, optional): Mask value for 4-byte Unicode characters. Defaults to 0x0B.
+        - general_mask_probability (float, optional): Probability of using the general mask instead of specific masks (0-1). Defaults to 0.5.
+        - seed (int, optional): Seed for the random number generator, -1 for random. Defaults to -1.
+        - debug (bool, optional): Enables debug output if set to True. Defaults to False.
+
+        Returns:
+        - (str): A new string with random masking applied.
+
+        Raises:
+        - ValueError: If input parameters are invalid.
+
+        Examples:
+        >>> noise.mask("Hello world!", probability=0.5, seed=42)
+        'H\x06ll\x09 w\x07rld!'
+        >>> noise.mask("Python", vowel_mask=0x01, consonant_mask=0x02, probability=1, seed=123)
+        '\x02\x01th\x02n'
+        """
+        return random_masking(
+            input_string=original_string,
+            probability=probability,
+            min_consecutive=min_consecutive,
+            max_consecutive=max_consecutive,
+            vowel_mask=vowel_mask,
+            consonant_mask=consonant_mask,
+            nws_mask=nws_mask,
+            general_mask=general_mask,
+            two_byte_mask=two_byte_mask,
+            four_byte_mask=four_byte_mask,
+            general_mask_probability=general_mask_probability,
             seed=seed,
             debug=debug,
         )
