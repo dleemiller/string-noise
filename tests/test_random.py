@@ -58,7 +58,7 @@ class RandomReplacementTests(unittest.TestCase):
             max_chars_out=1,
             probability=1.0,
             seed=42,
-            debug=False
+            debug=False,
         )
         self.assertTrue(len(original) * 2 == len(result))
 
@@ -71,7 +71,9 @@ class RandomReplacementTests(unittest.TestCase):
     def test_2byte_unicode_replacement(self):
         original = "hello\u00E9"  # '\u00E9' is a 2-byte character (é)
         charset = "\u00E9\u00F1"  # Including 2-byte characters (é, ñ)
-        result = string_noise.random_replacement(original, charset, probability=1, seed=42)
+        result = string_noise.random_replacement(
+            original, charset, probability=1, seed=42
+        )
         # The test checks that replacement occurs with 2-byte characters
         self.assertNotEqual(result, original)
         self.assertTrue(all(ch in charset for ch in result))
@@ -79,7 +81,9 @@ class RandomReplacementTests(unittest.TestCase):
     def test_4byte_unicode_replacement(self):
         original = "hello\U0001F600"  # '\U0001F600' is a 4-byte character (😀)
         charset = "\U0001F601\U0001F602"  # Including 4-byte characters (😁, 😂)
-        result = string_noise.random_replacement(original, charset, probability=1, seed=42)
+        result = string_noise.random_replacement(
+            original, charset, probability=1, seed=42
+        )
         # The test checks that replacement occurs with 4-byte characters
         self.assertNotEqual(result, original)
         self.assertTrue(all(ch in charset or ch in original for ch in result))
@@ -87,12 +91,12 @@ class RandomReplacementTests(unittest.TestCase):
     def test_mixed_byte_length_replacement(self):
         original = "hello\u00E9\U0001F600"  # Mixed 2-byte and 4-byte characters
         charset = "xyz\u00E9\U0001F602"  # Mixed 1-byte, 2-byte, and 4-byte characters
-        result = string_noise.random_replacement(original, charset, probability=1, seed=42)
+        result = string_noise.random_replacement(
+            original, charset, probability=1, seed=42
+        )
         # The test checks replacements with mixed byte-length characters
         self.assertNotEqual(result, original)
         self.assertTrue(all(ch in charset for ch in result))
-
-
 
 
 if __name__ == "__main__":

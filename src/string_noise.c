@@ -5,6 +5,7 @@
 
 PyObject *AugmentationFailed;
 
+#include "constants.h"
 #include "utils.h"
 #include "normalize.h"
 #include "augment.h"
@@ -46,6 +47,13 @@ PyMODINIT_FUNC PyInit_string_noise(void) {
     PyModule_AddIntConstant(module, "ASCENDING", 1);
     PyModule_AddIntConstant(module, "DESCENDING", 2);
     PyModule_AddIntConstant(module, "RESHUFFLE", 3);
+    PyModule_AddIntConstant(module, "DEFAULT_VOWEL_MASK", DEFAULT_VOWEL_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_CONSONANT_MASK", DEFAULT_CONSONANT_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_GENERAL_MASK", DEFAULT_GENERAL_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_NWS_MASK", DEFAULT_NWS_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_2BYTE_MASK", DEFAULT_2BYTE_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_4BYTE_MASK", DEFAULT_4BYTE_MASK);
+
 
     srand((unsigned int)time(NULL));  // Seed the random number generator
 

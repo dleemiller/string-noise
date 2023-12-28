@@ -30,7 +30,7 @@ class TestRandomMasking(unittest.TestCase):
         """Test with a known seed for predictable output."""
         original = "abcdefg"
         result = random_masking(original, seed=42, probability=0.5)
-        expected = "\x06\t\x07\te\t\x07"
+        expected = "\x06\tcd\t\x07\t"
         self.assertEqual(result, expected)
 
     def test_varying_lengths(self):
@@ -50,10 +50,10 @@ class TestRandomMasking(unittest.TestCase):
             nws_mask=0x03,
             general_mask=0x04,
             probability=1.0,
-            seed=12,
+            seed=13,
             general_mask_probability=0.2,
         )
-        self.assertEqual(result, "\x04\x04\x01\x01\x02")
+        self.assertEqual(result, "\x02\x04\x04\x01\x04")
 
     def test_general_mask_probability(self):
         """Test general mask probability."""
@@ -64,7 +64,6 @@ class TestRandomMasking(unittest.TestCase):
         expected_result = "\x09\x09\x09\x09\x09"  # All characters should be masked with the general mask
         self.assertEqual(result, expected_result)
 
-
     def test_whitespace_and_characters(self):
         """Test strings with a mix of whitespace and characters."""
         original = "abc def ghi"
@@ -74,7 +73,9 @@ class TestRandomMasking(unittest.TestCase):
     def test_boundary_conditions_for_consecutive(self):
         """Test boundary conditions for min_consecutive and max_consecutive."""
         original = "abc"
-        result = random_masking(original, min_consecutive=4, max_consecutive=5, seed=123)
+        result = random_masking(
+            original, min_consecutive=4, max_consecutive=5, seed=123
+        )
         self.assertEqual(result, original)  # No masking should occur
 
     def test_special_characters(self):
@@ -100,19 +101,24 @@ class TestRandomMasking(unittest.TestCase):
         """Test edge cases for general_mask_probability."""
         original = "abcdef"
         # Test with general_mask_probability = 0
-        result = random_masking(original, general_mask_probability=0, probability=1.0, seed=123)
+        result = random_masking(
+            original, general_mask_probability=0, probability=1.0, seed=123
+        )
         self.assertNotEqual(result, "\x09\x09\x09\x09\x09\x09")
         # Test with general_mask_probability = 0.5
-        result = random_masking(original, general_mask_probability=0.5, probability=1.0, seed=123)
+        result = random_masking(
+            original, general_mask_probability=0.5, probability=1.0, seed=123
+        )
         self.assertNotEqual(result, original)
         self.assertEqual(len(result), len(original))
 
     def test_randomness(self):
         """Test the randomness without specifying a seed."""
         original = "abcdef"
-        results = set(random_masking(original, probability=0.5, seed=-1) for _ in range(100))
+        results = set(
+            random_masking(original, probability=0.5, seed=-1) for _ in range(100)
+        )
         self.assertTrue(len(results) > 1)  # Expect multiple different results
-
 
 
 if __name__ == "__main__":

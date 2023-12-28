@@ -2,13 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "constants.h"
 #include "utils.h"
 
-// Define constants for sort order
-#define SHUFFLE 0
-#define ASCENDING 1
-#define DESCENDING 2
-#define RESHUFFLE 3
 
 static int compare_pyobject_ascending(const void *a, const void *b) {
     return PyObject_RichCompareBool(*(PyObject**)a, *(PyObject**)b, Py_LT);

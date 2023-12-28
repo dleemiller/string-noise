@@ -6,17 +6,6 @@
 
 #include "utils.h"
 
-// Function to determine the number of characters to be replaced, adjusting for whitespace
-Py_ssize_t process_chars_in(PyObject *input_string, Py_ssize_t start, Py_ssize_t chars_in) {
-    Py_ssize_t input_len = PyUnicode_GET_LENGTH(input_string);
-    for (Py_ssize_t j = 0; j < chars_in && start + j < input_len; ++j) {
-        Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, start + j);
-        if (Py_UNICODE_ISSPACE(ch)) {
-            return j;  // Return the new length up to the whitespace character
-        }
-    }
-    return chars_in;  // Return the original length if no whitespace is encountered
-}
 
 PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
     PyObject *input_string, *charset;
@@ -68,7 +57,6 @@ PyObject* random_replacement(PyObject *self, PyObject *args, PyObject *keywds) {
     }
 
     Py_ssize_t output_len = 0;
-    
     for (Py_ssize_t i = 0; i < input_len;) {
         Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, i);
         int remaining_length = input_len - i;

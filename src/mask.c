@@ -4,15 +4,9 @@
 #include <time.h>
 #include <ctype.h>
 
+#include "constants.h"
 #include "utils.h"
 
-// Define default control characters
-#define DEFAULT_VOWEL_MASK 0x06
-#define DEFAULT_CONSONANT_MASK 0x07
-#define DEFAULT_NWS_MASK 0x08
-#define DEFAULT_GENERAL_MASK 0x09
-#define DEFAULT_2BYTE_MASK 0x0A
-#define DEFAULT_4BYTE_MASK 0x0B
 
 int is_vowel(Py_UCS4 c) {
     Py_UCS4 lower_c = Py_UNICODE_TOLOWER(c);
@@ -72,29 +66,37 @@ PyObject* random_masking(PyObject *self, PyObject *args, PyObject *keywds) {
     for (Py_ssize_t i = 0; i < input_len;) {
         Py_UCS4 ch = PyUnicode_READ_CHAR(input_string, i);
         int remaining_length = input_len - i;
-
-        if (Py_UNICODE_ISSPACE(ch)) {
+    
+        if (debug) {
+            printf("Processing character %c at index %zu\n", ch, i);
+        }
+    
+        if (remaining_length < min_consecutive || Py_UNICODE_ISSPACE(ch)) {
             if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
+                PyErr_NoMemory();
                 Py_DECREF(output_string);
-                return PyErr_NoMemory();
+                return NULL;
             }
             i++;
             continue;
         }
 
-        if (remaining_length < min_consecutive) {
-            if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
-                Py_DECREF(output_string);
-                return PyErr_NoMemory();
-            }
-            i++;
-            continue;
-        }
-
-        int chars_to_mask = min_consecutive + (rand() % (max_consecutive - min_consecutive + 1));
-        chars_to_mask = (chars_to_mask > remaining_length) ? remaining_length : chars_to_mask;
+        //int chars_to_mask = min_consecutive + (rand() % (max_consecutive - min_consecutive + 1));
+        //chars_to_mask = (chars_to_mask > remaining_length) ? remaining_length : chars_to_mask;
 
         if ((double)rand() / RAND_MAX < probability) {
+            int chars_to_mask = min_consecutive + (rand() % (max_consecutive - min_consecutive + 1));
+            chars_to_mask = process_chars_in(input_string, i, chars_to_mask);
+            chars_to_mask = (chars_to_mask > remaining_length) ? remaining_length : chars_to_mask;
+    
+            if (chars_to_mask == 0) {
+                if (!write_char_to_output(&output_string, &output_len, ch, buffer_margin, debug)) {
+                    PyErr_NoMemory();
+                    Py_DECREF(output_string);
+                    return NULL;
+                }
+            }
+
             for (int j = 0; j < chars_to_mask; ++j) {
                 ch = PyUnicode_READ_CHAR(input_string, i + j);
                 Py_UCS4 mask_char = nws_mask;
