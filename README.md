@@ -1,5 +1,5 @@
 # string-noise
-Add noise to Python strings using various augmentation styles with the `string-noise` package. This package offers an N:M character-sequence mapping with probabilistic and weighted replacements, implemented in C for fast processing. It's ideal for generating synthetic error production, particularly useful for string augmentation in the loop while training machine learning models.
+Add noise to Python strings using various augmentation styles with the `string-noise` package. This package offers an N:M character-sequence mapping with probabilistic and weighted replacements, implemented in C for fast processing. Additionally, provides algorithms for masking and random noise. It's ideal for generating synthetic error production, particularly useful for string augmentation in the loop while training machine learning models.
 
 ## Table of Contents
 1. [Getting Started](#getting-started)
@@ -101,6 +101,7 @@ Apply random masking to a string, selectively replacing characters based on thei
 - `four_byte_mask (int)`: Optional; mask value for 4-byte Unicode characters (default: 0x0B).
 - `general_mask_probability (float)`: Optional; probability of using the general mask instead of specific masks (0-1) (default: 0.5).
 - `seed (int)`: Optional; seed for the random number generator, -1 for random (default: -1).
+- `skip_digits (bool)`: Optional; toggles digit masking on and off (default: False)
 - `debug (bool)`: Optional; enables debug output if set to True (default: False).
 
 Example usage:
