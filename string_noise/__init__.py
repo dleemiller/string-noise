@@ -10,6 +10,7 @@ from .string_noise import (
 from .string_noise import (
     DEFAULT_VOWEL_MASK,
     DEFAULT_CONSONANT_MASK,
+    DEFAULT_DIGIT_MASK,
     DEFAULT_NWS_MASK,
     DEFAULT_GENERAL_MASK,
     DEFAULT_2BYTE_MASK,
@@ -158,12 +159,14 @@ class LazyNoise:
         max_consecutive: int = 1,
         vowel_mask: int = DEFAULT_VOWEL_MASK,
         consonant_mask: int = DEFAULT_CONSONANT_MASK,
+        digit_mask: int = DEFAULT_DIGIT_MASK,
         nws_mask: int = DEFAULT_NWS_MASK,
         general_mask: int = DEFAULT_GENERAL_MASK,
         two_byte_mask: int = DEFAULT_2BYTE_MASK,
         four_byte_mask: int = DEFAULT_4BYTE_MASK,
         general_mask_probability: float = 0.5,
         seed: int = -1,
+        skip_digits: bool = False,
         debug: bool = False,
     ):
         """
@@ -209,6 +212,7 @@ class LazyNoise:
             four_byte_mask=four_byte_mask,
             general_mask_probability=general_mask_probability,
             seed=seed,
+            skip_digits=skip_digits,
             debug=debug,
         )
 

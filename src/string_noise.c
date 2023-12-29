@@ -49,6 +49,7 @@ PyMODINIT_FUNC PyInit_string_noise(void) {
     PyModule_AddIntConstant(module, "RESHUFFLE", 3);
     PyModule_AddIntConstant(module, "DEFAULT_VOWEL_MASK", DEFAULT_VOWEL_MASK);
     PyModule_AddIntConstant(module, "DEFAULT_CONSONANT_MASK", DEFAULT_CONSONANT_MASK);
+    PyModule_AddIntConstant(module, "DEFAULT_DIGIT_MASK", DEFAULT_DIGIT_MASK);
     PyModule_AddIntConstant(module, "DEFAULT_GENERAL_MASK", DEFAULT_GENERAL_MASK);
     PyModule_AddIntConstant(module, "DEFAULT_NWS_MASK", DEFAULT_NWS_MASK);
     PyModule_AddIntConstant(module, "DEFAULT_2BYTE_MASK", DEFAULT_2BYTE_MASK);
