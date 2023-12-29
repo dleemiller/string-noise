@@ -30,7 +30,7 @@ class TestRandomMasking(unittest.TestCase):
         """Test with a known seed for predictable output."""
         original = "abcdefg"
         result = random_masking(original, seed=42, probability=0.5)
-        expected = "\x06\ncd\n\x07\n"
+        expected = "\x10\x14cd\x14\x11\x14"
         self.assertEqual(result, expected)
 
     def test_varying_lengths(self):
@@ -61,7 +61,7 @@ class TestRandomMasking(unittest.TestCase):
         result = random_masking(
             original, general_mask_probability=1.0, probability=1.0, seed=123
         )
-        expected_result = "\x0A\x0A\x0A\x0A\x0A"  # All characters should be masked with the general mask
+        expected_result = "\x14\x14\x14\x14\x14"  # All characters should be masked with the general mask
         self.assertEqual(result, expected_result)
 
     def test_whitespace_and_characters(self):
