@@ -11,6 +11,7 @@ PyObject *AugmentationFailed;
 #include "augment.h"
 #include "random.h"
 #include "mask.h"
+#include "tokenizer.h"
 
 
 // Method definitions
@@ -23,6 +24,7 @@ static PyMethodDef StringNoiseMethods[] = {
     {"random_replacement", (PyCFunction)random_replacement, METH_VARARGS | METH_KEYWORDS,
      "Randomly replace characters in a string."},
     {"random_masking", (PyCFunction)random_masking, METH_VARARGS | METH_KEYWORDS, "Randomly masks a string."},
+    {"tokenize", (PyCFunction)tokenize, METH_VARARGS | METH_KEYWORDS, "Tokenize a string."},
     {NULL, NULL, 0, NULL} // Sentinel
 };
 
