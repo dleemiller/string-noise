@@ -1,7 +1,7 @@
 import json
 import re
 import random
-from string_noise.string_noise import lookup, build_tree  # C extension function
+from string_noise.string_noise import build_tree  # C extension function
 from .mappings import RESOURCE_PACKAGE as resource_package
 import importlib
 

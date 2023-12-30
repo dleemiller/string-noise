@@ -11,7 +11,7 @@ string_noise_module = Extension(
         "src/mask.c",
         "src/tokenizer.c",
         "src/utils.c",
-        "src/mispelling.c",
+        "src/trie.c",
     ],
 )
 
