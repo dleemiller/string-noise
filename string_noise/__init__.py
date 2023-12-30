@@ -1,4 +1,5 @@
 from .mappings import *
+from .mispelling import random_mispelling, _build_default_tree
 from .string_noise import (
     SHUFFLE,
     RESHUFFLE,
@@ -100,6 +101,17 @@ class LazyNoise:
         if not hasattr(self, "__phonetic"):
             self.__phonetic = load_phonetic()
         return self.__phonetic
+
+    @property
+    def mispelling(self):
+        """
+        Generates mispellings using C trie datastructure.
+        """
+        if not hasattr(self, "__mispelling"):
+            _build_default_tree()
+            self.__mispelling = random_mispelling
+        return self.__mispelling
+
 
     @staticmethod
     def random(

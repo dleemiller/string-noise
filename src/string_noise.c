@@ -12,6 +12,7 @@ PyObject *AugmentationFailed;
 #include "random.h"
 #include "mask.h"
 #include "tokenizer.h"
+#include "mispelling.h"
 
 
 // Method definitions
@@ -25,6 +26,11 @@ static PyMethodDef StringNoiseMethods[] = {
      "Randomly replace characters in a string."},
     {"random_masking", (PyCFunction)random_masking, METH_VARARGS | METH_KEYWORDS, "Randomly masks a string."},
     {"tokenize", (PyCFunction)tokenize, METH_VARARGS | METH_KEYWORDS, "Tokenize a string."},
+    {
+        "build_tree", (PyCFunction)build_tree, METH_VARARGS,
+        "Build the Trie from a dictionary of misspellings."
+    },
+    {"lookup", (PyCFunction)lookup, METH_VARARGS, "Lookup a word in the Trie."},
     {NULL, NULL, 0, NULL} // Sentinel
 };
 
@@ -57,6 +63,15 @@ PyMODINIT_FUNC PyInit_string_noise(void) {
     PyModule_AddIntConstant(module, "DEFAULT_2BYTE_MASK", DEFAULT_2BYTE_MASK);
     PyModule_AddIntConstant(module, "DEFAULT_4BYTE_MASK", DEFAULT_4BYTE_MASK);
 
+    // Initialize the trie root only if it's not already initialized
+    if (trieRoot == NULL) {
+        trieRoot = createNode();
+        if (trieRoot == NULL) {
+            PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for the trie root");
+            Py_DECREF(module);
+            return NULL;
+        }
+    }
 
     srand((unsigned int)time(NULL));  // Seed the random number generator
 
