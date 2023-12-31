@@ -28,7 +28,7 @@ static PyMethodDef StringNoiseMethods[] = {
     {"tokenize", (PyCFunction)tokenize, METH_VARARGS | METH_KEYWORDS, "Tokenize a string."},
     {
         "build_tree", (PyCFunction)build_tree, METH_VARARGS,
-        "Build the Trie from a dictionary of misspellings."
+        "Build the Trie from a dictionary of mappings."
     },
     {NULL, NULL, 0, NULL} // Sentinel
 };

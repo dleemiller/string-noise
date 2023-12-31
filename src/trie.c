@@ -3,8 +3,6 @@
 #include <string.h>
 #include "trie.h"
 
-TrieNode *trieRoot = NULL;
-
 
 TrieNode* createNode(void) {
     TrieNode *newNode = malloc(sizeof(TrieNode));
@@ -12,7 +10,7 @@ TrieNode* createNode(void) {
         return NULL; // Handle memory allocation failure
     }
     newNode->isEndOfWord = 0;
-    newNode->misspellings = NULL; // Initialize misspellings to NULL
+    newNode->mapping = NULL; // Initialize mapping to NULL
     for (int i = 0; i < TRIE_NODE_SIZE; i++) {
         newNode->children[i] = NULL;
     }
@@ -24,7 +22,7 @@ int charToIndex(char c) {
     return (int)uc;
 }
 
-void insertIntoTrie(TrieNode *root, const char *word, PyObject *misspellings) {
+void insertIntoTrie(TrieNode *root, const char *word, PyObject *mapping) {
     TrieNode *current = root;
     while (*word) {
         int index = charToIndex(*word);
@@ -39,7 +37,7 @@ void insertIntoTrie(TrieNode *root, const char *word, PyObject *misspellings) {
         word++;
     }
     current->isEndOfWord = 1;
-    current->misspellings = misspellings; // Attach the misspellings list to the node
+    current->mapping = mapping; // Attach the mapping list to the node
 }
 
 
@@ -51,8 +49,8 @@ void freeTrie(TrieNode *root) {
             freeTrie(root->children[i]);
         }
     }
-    if (root->misspellings != NULL) {
-        Py_DECREF(root->misspellings); // Decrement reference count of the misspellings list
+    if (root->mapping != NULL) {
+        Py_DECREF(root->mapping); // Decrement reference count of the mapping list
     }
     free(root);
 }
@@ -87,18 +85,54 @@ PyObject* build_tree(PyObject *self, PyObject *args) {
     PyObject *key, *value;
     Py_ssize_t pos = 0;
     while (PyDict_Next(py_dict, &pos, &key, &value)) {
-        if (!PyUnicode_Check(key) || !PyList_Check(value)) {
-            continue; // Skip invalid entries
+        if (!PyUnicode_Check(key)) {
+            PyErr_SetString(PyExc_TypeError, "All keys in the dictionary must be strings");
+            Py_DECREF(pyTrie);
+            return NULL;
         }
 
-        Py_INCREF(value); // Increment reference count of the misspellings list
-        const char *correct_spelling = PyUnicode_AsUTF8(key);
-        insertIntoTrie(pyTrie->root, correct_spelling, value);
+        // Check for string value
+        if (PyUnicode_Check(value)) {
+            Py_INCREF(value);
+        }
+        // Check for list of strings
+        else if (PyList_Check(value)) {
+            for (Py_ssize_t i = 0; i < PyList_Size(value); i++) {
+                PyObject *item = PyList_GetItem(value, i);
+                if (!PyUnicode_Check(item)) {
+                    PyErr_SetString(PyExc_TypeError, "All elements in the list must be strings");
+                    Py_DECREF(pyTrie);
+                    return NULL;
+                }
+            }
+            Py_INCREF(value);
+        }
+        // Check for dict with string keys and float values
+        else if (PyDict_Check(value)) {
+            PyObject *sub_key, *sub_value;
+            Py_ssize_t sub_pos = 0;
+            while (PyDict_Next(value, &sub_pos, &sub_key, &sub_value)) {
+                if (!PyUnicode_Check(sub_key) || !PyFloat_Check(sub_value)) {
+                    PyErr_SetString(PyExc_TypeError, "In a dict value, all keys must be strings and all values must be floats");
+                    Py_DECREF(pyTrie);
+                    return NULL;
+                }
+            }
+            Py_INCREF(value);
+        }
+        // If none of the above, raise an error
+        else {
+            PyErr_SetString(PyExc_TypeError, "Values must be a string, a list of strings, or a dict with string keys and float values");
+            Py_DECREF(pyTrie);
+            return NULL;
+        }
+
+        const char *word = PyUnicode_AsUTF8(key);
+        insertIntoTrie(pyTrie->root, word, value);
     }
 
     return (PyObject *)pyTrie;
 }
-
 
 TrieNode* lookupInTrie(TrieNode *root, const char *word) {
     TrieNode *current = root;
@@ -131,13 +165,13 @@ PyObject* PyTrie_lookup(PyTrieObject *self, PyObject *args) {
     }
 
     if (current != NULL && current->isEndOfWord) {
-        if (current->misspellings != NULL) {
-            Py_INCREF(current->misspellings); // Increment ref count before returning
-            return current->misspellings;
+        if (current->mapping != NULL) {
+            Py_INCREF(current->mapping); // Increment ref count before returning
+            return current->mapping;
         }
     }
 
-    Py_RETURN_NONE; // Return None if word not found or no misspellings
+    Py_RETURN_NONE; // Return None if word not found or no mapping
 }
 
 // Define methods of PyTrie type

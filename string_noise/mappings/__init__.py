@@ -35,6 +35,8 @@ load_llm_ocr = CustomMapper.new("llm_ocr.json")
 load_nguyen_ocr = CustomMapper.new("nguyen_ocr.json")
 
 load_mispelling = CustomTrieMapper.new("spell_errors.json")
+load_moe_mispelling = CustomTrieMapper.new("moe_reduced.json.gz")
+
 
 __all__ = [
     "CustomMapper",
@@ -45,4 +47,5 @@ __all__ = [
     "load_llm_ocr",
     "load_nguyen_ocr",
     "load_mispelling",
+    "load_moe_mispelling",
 ]

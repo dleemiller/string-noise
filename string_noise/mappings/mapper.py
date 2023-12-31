@@ -1,3 +1,4 @@
+import gzip
 import json
 import random
 import re
@@ -41,10 +42,14 @@ class Mapper:
             with open(resource_path, "r") as file:
                 json_data = json.load(file)
         else:
-            # Use importlib.resources.files() to access the resource
             resource = importlib.resources.files(resource_package) / resource_path
-            with resource.open("r") as file:
-                json_data = json.load(file)
+            # Check if the file is gzipped
+            if resource_path.endswith(".gz"):
+                with gzip.open(resource, "rt") as file:
+                    json_data = json.load(file)
+            else:
+                with resource.open("r") as file:
+                    json_data = json.load(file)
         return cls(json_data)
 
     def __call__(

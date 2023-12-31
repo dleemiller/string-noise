@@ -1,5 +1,5 @@
 # string-noise
-Add noise to Python strings using various augmentation styles with the `string-noise` package. This package offers an N:M character-sequence mapping with probabilistic and weighted replacements, implemented in C for fast processing. Additionally, provides algorithms for masking and random noise. It's ideal for generating synthetic error production, particularly useful for string augmentation in the loop while training machine learning models.
+Add noise to Python strings using various augmentation styles with the `string-noise` package. This package offers an N:M character-sequence mapping with probabilistic and weighted replacements, utilizing C extensions for fast processing. Implements Trie data structure in C for fast performance in large maps, like mispelling/moe. Additionally, provides algorithms for masking and random noise. It's ideal for generating synthetic error production, particularly useful for string augmentation in the loop while training machine learning models.
 
 ## Table of Contents
 1. [Getting Started](#getting-started)
@@ -72,6 +72,15 @@ Replace characters based on similar sounds.
 
 #### `keyboard`
 Simulate nearest keystroke mistakes.
+
+#### `mispelling`
+Small mispelling lookup for lighter mispelling noising.
+
+#### `moe`
+Uses top 167k words from the "Misspelling Oblivious Word Embeddings" corpus: https://arxiv.org/abs/1905.09755
+
+Fast performance using Trie data structure implemented in C.
+
 
 Each of these methods accepts the following parameters:
 
