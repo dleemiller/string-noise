@@ -11,7 +11,6 @@ PyObject *AugmentationFailed;
 #include "augment.h"
 #include "random.h"
 #include "mask.h"
-#include "tokenizer.h"
 #include "trie.h"
 
 
@@ -25,7 +24,7 @@ static PyMethodDef StringNoiseMethods[] = {
     {"random_replacement", (PyCFunction)random_replacement, METH_VARARGS | METH_KEYWORDS,
      "Randomly replace characters in a string."},
     {"random_masking", (PyCFunction)random_masking, METH_VARARGS | METH_KEYWORDS, "Randomly masks a string."},
-    {"tokenize", (PyCFunction)tokenize, METH_VARARGS | METH_KEYWORDS, "Tokenize a string."},
+    //{"tokenize", (PyCFunction)tokenize, METH_VARARGS | METH_KEYWORDS, "Tokenize a string."},
     {
         "build_tree", (PyCFunction)build_tree, METH_VARARGS,
         "Build the Trie from a dictionary of mappings."
@@ -72,6 +71,25 @@ PyMODINIT_FUNC PyInit_string_noise(void) {
         Py_DECREF(module);
         return NULL;
     }
+
+    if (PyType_Ready(&PyMarkovTrieType) < 0)
+        return NULL;
+
+    Py_INCREF(&PyMarkovTrieType);
+    if (PyModule_AddObject(module, "MarkovTrie", (PyObject *)&PyMarkovTrieType) < 0) {
+        Py_DECREF(&PyMarkovTrieType);
+        Py_DECREF(module);
+        return NULL;
+    }
+    //if (PyType_Ready(&PyMarkovTreeType) < 0)
+    //    return NULL;
+    //
+    //Py_INCREF(&PyMarkovTreeType);
+    //if (PyModule_AddObject(module, "MarkovTree", (PyObject *)&PyMarkovTreeType) < 0) {
+    //    Py_DECREF(&PyMarkovTreeType);
+    //    Py_DECREF(module);
+    //    return NULL;
+    //}
 
     srand((unsigned int)time(NULL));  // Seed the random number generator
 

@@ -1,6 +1,7 @@
 #include <Python.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include "trie.h"
 
 
@@ -196,4 +197,123 @@ PyTypeObject PyTrieType = {
     .tp_dealloc = (destructor) PyTrie_dealloc,
     .tp_new = PyType_GenericNew,
 };
+
+
+MarkovNode* createMarkovNode(void) {
+    MarkovNode *newNode = malloc(sizeof(MarkovNode));
+    if (newNode == NULL) {
+        return NULL; // Handle memory allocation failure
+    }
+    //newNode->isEndOfWord = 0;
+    newNode->forwardMapping = NULL; // Initialize mapping to NULL
+    newNode->reverseMapping = NULL;
+    for (int i = 0; i < TRIE_NODE_SIZE; i++) {
+        newNode->children[i] = NULL;
+    }
+    return newNode;
+}
+
+void freeMarkovTrie(MarkovNode *root) {
+    if (root == NULL) return;
+    for (int i = 0; i < TRIE_NODE_SIZE; i++) {
+        if (root->children[i]) {
+            freeMarkovTrie(root->children[i]);
+        }
+    }
+    if (root->forwardMapping != NULL) {
+        Py_DECREF(root->forwardMapping);
+    }
+    if (root->reverseMapping != NULL) {
+        Py_DECREF(root->reverseMapping);
+    }
+    free(root);
+}
+
+//PyObject* PyMarkovTrie_New(PyTypeObject *type, PyObject *args, PyObject *kwds) {
+//    PyMarkovTrieObject *self = (PyMarkovTrieObject *)type->tp_alloc(type, 0);
+//    if (!self) {
+//        return PyErr_NoMemory();
+//    }
+//    // Temporarily comment out initialization logic
+//    // self->root = NULL;
+//    return (PyObject *)self;
+//}
+
+
+static void PyMarkovTrie_dealloc(PyMarkovTrieObject *self) {
+    freeMarkovTrie(self->root);
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static PyMethodDef PyMarkovTrie_methods[] = {
+    // Method definitions go here
+    // Example: {"load", (pycfunction)pymarkovtrie_load, meth_varargs, "load a markov trie from a python object."},
+    // Other methods: dump, replace, index, etc.
+    {NULL} // Sentinel
+};
+
+PyTypeObject PyMarkovTrieType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "string_noise.MarkovTrie",
+    .tp_doc = "Markov Trie object",
+    .tp_basicsize = sizeof(PyMarkovTrieObject),
+    .tp_itemsize = 0,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = PyMarkovTrie_methods,
+    .tp_dealloc = (destructor) PyMarkovTrie_dealloc,
+    .tp_new = PyType_GenericNew,  // Using the generic allocator
+    // ... other type members
+};
+
+void insertIntoMarkovTrie(MarkovNode *root, const char *word, int depth) {
+    if (!root || !word) return;
+    int length = strlen(word);
+    if (length < depth) return;
+
+    for (int i = 0; i <= length - depth; i++) {
+        // Forward Trie Construction
+        MarkovNode *current = root;
+        for (int j = 0; j < depth - 1; j++) {
+            int index = charToIndex(word[i + j]);
+            if (!current->children[index]) {
+                current->children[index] = createMarkovNode();
+            }
+            current = current->children[index];
+        }
+        updateCharacterCount(current, word[i + depth - 1], true); // Update forward count
+
+        // Reverse Trie Construction
+        current = root;
+        for (int j = depth - 1; j > 0; j--) {
+            int index = charToIndex(word[i + j]);
+            if (!current->children[index]) {
+                current->children[index] = createMarkovNode();
+            }
+            current = current->children[index];
+        }
+        updateCharacterCount(current, word[i], false); // Update reverse count
+    }
+}
+
+void updateCharacterCount(MarkovNode *node, char character, bool isForward) {
+    PyObject *mapping = isForward ? node->forwardMapping : node->reverseMapping;
+    if (!mapping) {
+        mapping = PyDict_New();
+        if (!mapping) return; // Handle failed allocation
+    
+        if (isForward) {
+            node->forwardMapping = mapping;
+        } else {
+            node->reverseMapping = mapping;
+        }
+    }
+
+    PyObject *charCount = PyDict_GetItemString(mapping, &character);
+    if (charCount) {
+        long count = PyLong_AsLong(charCount) + 1;
+        PyDict_SetItemString(mapping, &character, PyLong_FromLong(count));
+    } else {
+        PyDict_SetItemString(mapping, &character, PyLong_FromLong(1));
+    }
+}
 

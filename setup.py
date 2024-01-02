@@ -9,10 +9,12 @@ string_noise_module = Extension(
         "src/augment.c",
         "src/random.c",
         "src/mask.c",
-        "src/tokenizer.c",
+        #"src/tokenizer.c",
         "src/utils.c",
         "src/trie.c",
+        #"src/markov.c",
     ],
+    extra_compile_args=["-g"],
 )
 
 # Define setup parameters
