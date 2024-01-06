@@ -1,5 +1,6 @@
 import unittest
 from string_noise import string_noise
+from string_noise.string_noise import MarkovTrie
 
 
 class TestTrie(unittest.TestCase):
@@ -83,6 +84,48 @@ class TestTrie(unittest.TestCase):
         # Test empty trie
         trie = string_noise.build_tree({})
         self.assertIsNone(trie.lookup("anything"))
+
+    def test_index_string_basic(self):
+        trie = MarkovTrie()
+        count = trie.index_string("abcd")
+        self.assertEqual(count, 2)  # "abc" should create 2 trigrams
+
+    def test_index_string_edge_cases(self):
+        trie = MarkovTrie()
+        count = trie.index_string("")
+        self.assertEqual(count, 0)  # Empty string
+
+        count = trie.index_string("абв")  # Non-Latin characters
+        self.assertEqual(count, 0)
+
+    def test_dump_empty_trie(self):
+        trie = MarkovTrie()
+        dumped = trie.dump()
+        self.assertEqual(dumped, {"forward": {}, "reverse": {}})
+
+    def test_dump_populated_trie(self):
+        trie = MarkovTrie()
+        trie.index_string("abc")
+        dumped = trie.dump()
+        self.assertDictEqual(
+            dumped,
+            {"forward": {"a": {"b": {"c": 1}}}, "reverse": {"c": {"b": {"a": 1}}}},
+        )
+
+    def test_load_valid_data(self):
+        trie = MarkovTrie()
+        valid_data = {
+            "forward": {"a": {"b": {"c": 1}}},
+            "reverse": {"c": {"b": {"a": 1}}},
+        }
+        trie.load(valid_data)
+        self.assertDictEqual(trie.dump(), valid_data)
+
+    def test_load_invalid_data(self):
+        trie = MarkovTrie()
+        invalid_data = {"forward": "invalid", "reverse": "invalid"}
+        with self.assertRaises(TypeError):
+            trie.load(invalid_data)
 
 
 if __name__ == "__main__":

@@ -204,9 +204,7 @@ MarkovNode* createMarkovNode(void) {
     if (newNode == NULL) {
         return NULL; // Handle memory allocation failure
     }
-    //newNode->isEndOfWord = 0;
-    newNode->forwardMapping = NULL; // Initialize mapping to NULL
-    newNode->reverseMapping = NULL;
+    memset(newNode->characterCounts, 0, sizeof(newNode->characterCounts)); // Initialize counts to 0
     for (int i = 0; i < TRIE_NODE_SIZE; i++) {
         newNode->children[i] = NULL;
     }
@@ -220,37 +218,323 @@ void freeMarkovTrie(MarkovNode *root) {
             freeMarkovTrie(root->children[i]);
         }
     }
-    if (root->forwardMapping != NULL) {
-        Py_DECREF(root->forwardMapping);
-    }
-    if (root->reverseMapping != NULL) {
-        Py_DECREF(root->reverseMapping);
-    }
     free(root);
 }
 
-//PyObject* PyMarkovTrie_New(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-//    PyMarkovTrieObject *self = (PyMarkovTrieObject *)type->tp_alloc(type, 0);
-//    if (!self) {
-//        return PyErr_NoMemory();
-//    }
-//    // Temporarily comment out initialization logic
-//    // self->root = NULL;
-//    return (PyObject *)self;
-//}
-
 
 static void PyMarkovTrie_dealloc(PyMarkovTrieObject *self) {
-    freeMarkovTrie(self->root);
+    freeMarkovTrie(self->forwardRoot);
+    freeMarkovTrie(self->reverseRoot);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
+
+MarkovNode* getOrCreateChild(MarkovNode *node, char character, int debug) {
+    if (debug) {
+        printf("getOrCreateChild: character = %c\n", character);
+    }
+    if (node == NULL) {
+        printf("Error: Received NULL node in getOrCreateChild\n");
+        return NULL;
+    }
+
+    if (debug) {
+        printf("Accessing child for character %c\n", character);
+    }
+    if (node->children[(unsigned char)character] == NULL) {
+        if (debug) {
+            printf("Creating new child node for character %c\n", character);
+        }
+        node->children[(unsigned char)character] = createMarkovNode();
+        if (node->children[(unsigned char)character] == NULL) {
+            if (debug) {
+                printf("Failed to create child node for character %c\n", character);
+            }
+            return NULL;
+        }
+    }
+    return node->children[(unsigned char)character];
+}
+
+// Utility function to increment character count
+void incrementCharacterCount(MarkovNode *node, char character) {
+    node->characterCounts[(unsigned char)character]++;
+}
+
+// Helper function to check if a char is a multi-byte UTF-8 character
+bool isMultiByteChar(char c) {
+    // Check if the most significant bit is set (indicative of multi-byte characters in UTF-8)
+    return (c & 0x80) != 0;
+}
+
+static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
+    const char *inputString;
+    int debug = 0;  // Default value for debug flag
+
+    if (!PyArg_ParseTuple(args, "s|p", &inputString, &debug)) {
+        return NULL; // Error in parsing arguments
+    }
+
+    if (debug) {
+        printf("Indexing string: %s\n", inputString);
+    }
+
+    size_t length = strlen(inputString);
+    if (length < 3) {
+        if (debug) {
+            printf("String too short for trigram processing. Length: %zu\n", length);
+        }
+        return PyLong_FromLong(0);
+    }
+
+    int trigramCount = 0;
+    for (size_t i = 0; i < length - 2; i++) {
+        if (isMultiByteChar(inputString[i]) || 
+            isMultiByteChar(inputString[i + 1]) || 
+            isMultiByteChar(inputString[i + 2])) {
+            continue; // Skip trigrams with multi-byte characters
+        }
+
+        if (debug) {
+            printf("Processing forward trigram: %c%c%c\n", inputString[i], inputString[i + 1], inputString[i + 2]);
+        }
+
+        // Forward indexing
+        MarkovNode *firstNode = getOrCreateChild(self->forwardRoot, inputString[i], debug);
+        if (firstNode == NULL) return NULL;
+        MarkovNode *secondNode = getOrCreateChild(firstNode, inputString[i + 1], debug);
+        if (secondNode == NULL) return NULL;
+        incrementCharacterCount(secondNode, inputString[i + 2]);
+
+        // Process the reverse trigram starting from the end of the string
+        if (debug) {
+            printf("Processing reverse trigram: %c%c%c\n", inputString[length - i - 1], inputString[length - i - 2], inputString[length - i - 3]);
+        }
+
+        // Reverse indexing
+        MarkovNode *lastNode = getOrCreateChild(self->reverseRoot, inputString[length - i - 1], debug);
+        if (lastNode == NULL) return NULL;
+        MarkovNode *secondLastNode = getOrCreateChild(lastNode, inputString[length - i - 2], debug);
+        if (secondLastNode == NULL) return NULL;
+        incrementCharacterCount(secondLastNode, inputString[length - i - 3]);
+
+        trigramCount++;
+    }
+
+    if (debug) {
+        printf("Indexed %d trigrams\n", trigramCount);
+    }
+    return PyLong_FromLong(trigramCount);
+}
+
+void traverseMarkovNode(MarkovNode *node, PyObject *dict, int depth, int debug) {
+    if (node == NULL || depth == 0) return;
+
+    for (int i = 0; i < 256; i++) {
+        if (i > 127) break;
+
+        if (node->children[i] != NULL) {
+            PyObject *childDict = PyDict_New();
+            traverseMarkovNode(node->children[i], childDict, depth - 1, debug);
+
+            char key[2] = {(char)i, '\0'};
+            if (debug) {
+                printf("Adding child dict for ASCII character: %d (%s)\n", i, key);
+            }
+            PyDict_SetItemString(dict, key, childDict);
+            Py_DECREF(childDict);
+        }
+
+        if (node->characterCounts[i] > 0) {
+            char key[2] = {(char)i, '\0'};
+            PyObject *count = PyLong_FromLong(node->characterCounts[i]);
+            if (debug) {
+                printf("Setting count for ASCII character: %d (%s), count: %ld\n", i, key, PyLong_AsLong(count));
+            }
+            PyDict_SetItemString(dict, key, count);
+            Py_DECREF(count);
+        }
+    }
+}
+
+static PyObject* dump_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
+    int debug = 0;  // Default value for debug flag
+
+    // Parse the optional debug argument
+    if (!PyArg_ParseTuple(args, "|p", &debug)) {
+        return NULL; // Error in parsing arguments
+    }
+
+    PyObject *result = PyDict_New();
+    PyObject *forwardDict = PyDict_New();
+    PyObject *reverseDict = PyDict_New();
+
+    // Traverse for forward and reverse mappings with debug flag
+    if (self->forwardRoot != NULL) {
+        traverseMarkovNode(self->forwardRoot, forwardDict, MAX_DEPTH, debug);
+    }
+    if (self->reverseRoot != NULL) {
+        traverseMarkovNode(self->reverseRoot, reverseDict, MAX_DEPTH, debug);
+    }
+
+    PyDict_SetItemString(result, "forward", forwardDict);
+    PyDict_SetItemString(result, "reverse", reverseDict);
+
+    Py_DECREF(forwardDict);
+    Py_DECREF(reverseDict);
+
+    return result;
+}
+
+bool validateSubTrieDict(PyObject *subDict) {
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+
+    while (PyDict_Next(subDict, &pos, &key, &value)) {
+        if (!PyUnicode_Check(key) || PyUnicode_GetLength(key) != 1) {
+            PyErr_SetString(PyExc_TypeError, "Keys must be single-character strings");
+            return false;
+        }
+
+        if (PyDict_Check(value)) {
+            if (!validateSubTrieDict(value)) return false;
+        } else if (!PyLong_Check(value)) {
+            PyErr_SetString(PyExc_TypeError, "Values must be integers or nested dictionaries");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool validateTrieDict(PyObject *dict) {
+    if (!PyDict_Check(dict)) {
+        PyErr_SetString(PyExc_TypeError, "Expected a dictionary");
+        return false;
+    }
+
+    PyObject *forwardDict = PyDict_GetItemString(dict, "forward");
+    PyObject *reverseDict = PyDict_GetItemString(dict, "reverse");
+    if (!forwardDict || !reverseDict || !PyDict_Check(forwardDict) || !PyDict_Check(reverseDict)) {
+        PyErr_SetString(PyExc_TypeError, "Invalid format: missing or incorrect 'forward'/'reverse' dictionaries");
+        return false;
+    }
+
+    return validateSubTrieDict(forwardDict) && validateSubTrieDict(reverseDict);
+}
+
+bool loadTrieFromDict(MarkovNode *node, PyObject *dict) {
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+
+    while (PyDict_Next(dict, &pos, &key, &value)) {
+        // Ensure the key is a string
+        if (!PyUnicode_Check(key)) {
+            PyErr_SetString(PyExc_TypeError, "Trie keys must be strings");
+            return false;
+        }
+
+        // Convert key to char
+        const char *keyStr = PyUnicode_AsUTF8(key);
+        if (!keyStr || strlen(keyStr) != 1) {
+            PyErr_SetString(PyExc_ValueError, "Trie keys must be single characters");
+            return false;
+        }
+        char character = keyStr[0];
+
+        // If value is a dictionary, recurse
+        if (PyDict_Check(value)) {
+            node->children[(unsigned char)character] = createMarkovNode();
+            if (!node->children[(unsigned char)character] || !loadTrieFromDict(node->children[(unsigned char)character], value)) {
+                return false;
+            }
+        }
+        // If value is an integer, set the character count
+        else if (PyLong_Check(value)) {
+            node->characterCounts[(unsigned char)character] = PyLong_AsLong(value);
+        } else {
+            PyErr_SetString(PyExc_TypeError, "Trie values must be integers or dictionaries");
+            return false;
+        }
+    }
+    return true;
+}
+
+static PyObject* load_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
+    PyObject *trieDict;
+
+    // Parse the input dictionary
+    if (!PyArg_ParseTuple(args, "O", &trieDict)) {
+        return NULL; // Error in parsing arguments
+    }
+
+    // Validate the input format
+    if (!validateTrieDict(trieDict)) {
+        // Error message set in validateTrieDict
+        return NULL;
+    }
+
+    // Extract forward and reverse dictionaries
+    PyObject *forwardDict = PyDict_GetItemString(trieDict, "forward");
+    PyObject *reverseDict = PyDict_GetItemString(trieDict, "reverse");
+    if (!forwardDict || !reverseDict) {
+        PyErr_SetString(PyExc_KeyError, "Dictionary must contain 'forward' and 'reverse' keys");
+        return NULL;
+    }
+
+    // Clear existing Trie before loading new data
+    freeMarkovTrie(self->forwardRoot);
+    self->forwardRoot = createMarkovNode();
+    freeMarkovTrie(self->reverseRoot);
+    self->reverseRoot = createMarkovNode();
+
+    // Load forward Trie
+    if (!loadTrieFromDict(self->forwardRoot, forwardDict)) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to load forward Trie");
+        return NULL;
+    }
+
+    // Load reverse Trie
+    if (!loadTrieFromDict(self->reverseRoot, reverseDict)) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to load reverse Trie");
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
 
 static PyMethodDef PyMarkovTrie_methods[] = {
     // Method definitions go here
     // Example: {"load", (pycfunction)pymarkovtrie_load, meth_varargs, "load a markov trie from a python object."},
+    {"index_string", (PyCFunction)index_string_MarkovTrie, METH_VARARGS, "Index a string in the Markov Trie."},
+    {"dump", (PyCFunction)dump_MarkovTrie, METH_VARARGS, "Dump the Markov Trie into a Python dictionary."},
+    {"load", (PyCFunction)load_MarkovTrie, METH_VARARGS, "Load data into the Markov Trie from a dictionary."},
     // Other methods: dump, replace, index, etc.
     {NULL} // Sentinel
 };
+
+static PyObject *PyMarkovTrie_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
+    PyMarkovTrieObject *self;
+    self = (PyMarkovTrieObject *)type->tp_alloc(type, 0);
+    if (self != NULL) {
+        // Initialize forwardRoot
+        self->forwardRoot = createMarkovNode();
+        if (self->forwardRoot == NULL) {
+            Py_DECREF(self);
+            PyErr_SetString(PyExc_MemoryError, "Failed to create forward root node");
+            return NULL;
+        }
+
+        // Initialize reverseRoot
+        self->reverseRoot = createMarkovNode();
+        if (self->reverseRoot == NULL) {
+            Py_DECREF(self->forwardRoot);
+            Py_DECREF(self);
+            PyErr_SetString(PyExc_MemoryError, "Failed to create reverse root node");
+            return NULL;
+        }
+    }
+    return (PyObject *)self;
+}
 
 PyTypeObject PyMarkovTrieType = {
     PyVarObject_HEAD_INIT(NULL, 0)
@@ -261,59 +545,7 @@ PyTypeObject PyMarkovTrieType = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = PyMarkovTrie_methods,
     .tp_dealloc = (destructor) PyMarkovTrie_dealloc,
-    .tp_new = PyType_GenericNew,  // Using the generic allocator
+    .tp_new = PyMarkovTrie_new,  // Using the generic allocator
     // ... other type members
 };
-
-void insertIntoMarkovTrie(MarkovNode *root, const char *word, int depth) {
-    if (!root || !word) return;
-    int length = strlen(word);
-    if (length < depth) return;
-
-    for (int i = 0; i <= length - depth; i++) {
-        // Forward Trie Construction
-        MarkovNode *current = root;
-        for (int j = 0; j < depth - 1; j++) {
-            int index = charToIndex(word[i + j]);
-            if (!current->children[index]) {
-                current->children[index] = createMarkovNode();
-            }
-            current = current->children[index];
-        }
-        updateCharacterCount(current, word[i + depth - 1], true); // Update forward count
-
-        // Reverse Trie Construction
-        current = root;
-        for (int j = depth - 1; j > 0; j--) {
-            int index = charToIndex(word[i + j]);
-            if (!current->children[index]) {
-                current->children[index] = createMarkovNode();
-            }
-            current = current->children[index];
-        }
-        updateCharacterCount(current, word[i], false); // Update reverse count
-    }
-}
-
-void updateCharacterCount(MarkovNode *node, char character, bool isForward) {
-    PyObject *mapping = isForward ? node->forwardMapping : node->reverseMapping;
-    if (!mapping) {
-        mapping = PyDict_New();
-        if (!mapping) return; // Handle failed allocation
-    
-        if (isForward) {
-            node->forwardMapping = mapping;
-        } else {
-            node->reverseMapping = mapping;
-        }
-    }
-
-    PyObject *charCount = PyDict_GetItemString(mapping, &character);
-    if (charCount) {
-        long count = PyLong_AsLong(charCount) + 1;
-        PyDict_SetItemString(mapping, &character, PyLong_FromLong(count));
-    } else {
-        PyDict_SetItemString(mapping, &character, PyLong_FromLong(1));
-    }
-}
 
