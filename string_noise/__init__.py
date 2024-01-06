@@ -1,3 +1,5 @@
+from functools import cached_property
+
 from .mappings import *
 from .string_noise import (
     SHUFFLE,
@@ -47,59 +49,68 @@ class LazyNoise:
     >>> noise.ocr("Example text", probability=0.9, sort_order=RESHUFFLE, seed=43)
     """
 
-    @property
+    @cached_property
     def ocr(self):
         """
         Loads and returns a mapping for OCR-style noise augmentation.
         """
-        if not hasattr(self, "__ocr"):
-            self.__ocr = load_nguyen_ocr()
-        return self.__ocr
+        return load_nguyen_ocr()
 
-    @property
+    @cached_property
     def basic_ocr(self):
         """
         Loads and returns a basic mapping for OCR-style noise augmentation.
         """
-        if not hasattr(self, "__basic_ocr"):
-            self.__basic_ocr = load_llm_ocr()
-        return self.__basic_ocr
+        return load_llm_ocr()
 
-    @property
+    @cached_property
     def leet(self):
         """
         Loads and returns a mapping for leet speak-style noise augmentation.
         """
-        if not hasattr(self, "__leet"):
-            self.__leet = load_leet()
-        return self.__leet
+        return load_leet()
 
-    @property
+    @cached_property
     def keyboard(self):
         """
         Loads and returns a mapping for keyboard-style noise augmentation.
         """
-        if not hasattr(self, "__keyboard"):
-            self.__keyboard = load_keyboard()
-        return self.__keyboard
+        return load_keyboard()
 
-    @property
+    @cached_property
     def homoglyph(self):
         """
         Loads and returns a mapping for homoglyph-style noise augmentation.
         """
-        if not hasattr(self, "__homoglyph"):
-            self.__homoglyph = load_homoglyph()
-        return self.__homoglyph
+        return load_homoglyph()
 
-    @property
+    @cached_property
     def phonetic(self):
         """
         Loads and returns a mapping for phonetic-style noise augmentation.
         """
-        if not hasattr(self, "__phonetic"):
-            self.__phonetic = load_phonetic()
-        return self.__phonetic
+        return load_phonetic()
+
+    @cached_property
+    def mispelling(self):
+        """
+        Generates mispellings using C trie datastructure.
+        """
+        return load_mispelling()
+
+    @cached_property
+    def moe(self):
+        """
+        moe - Misspelling Oblivious Word Embeddings
+        Generates MOE mispellings using C trie data structure.
+
+        Pared down to top 167k words using top word counts from:
+        https://norvig.com/ngrams/count_1w.txt
+
+        See here for details:
+        https://github.com/facebookresearch/moe
+        """
+        return load_moe_mispelling()
 
     @staticmethod
     def random(
