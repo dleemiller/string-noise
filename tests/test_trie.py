@@ -1,3 +1,4 @@
+import ctypes
 import unittest
 from string_noise import string_noise
 from string_noise.string_noise import MarkovTrie
@@ -126,6 +127,38 @@ class TestTrie(unittest.TestCase):
         invalid_data = {"forward": "invalid", "reverse": "invalid"}
         with self.assertRaises(TypeError):
             trie.load(invalid_data)
+
+    def test_index_runtime(self):
+        trie = MarkovTrie()
+
+        size_of_unsigned_int = ctypes.sizeof(ctypes.c_uint)
+        max_uint = (2 ** (size_of_unsigned_int * 8)) - 1
+        valid_data = {
+            "forward": {"a": {"b": {"c": max_uint}}},
+            "reverse": {"c": {"b": {"a": 1}}},
+        }
+        trie.load(valid_data)
+        self.assertDictEqual(trie.dump(), valid_data, "Trie should match loaded data")
+
+        with self.assertRaises(
+            RuntimeError
+        ):  # can't index due to full capacity flag set
+            trie.index_string("abc")
+
+    def test_index_overflow(self):
+        trie = MarkovTrie()
+
+        size_of_unsigned_int = ctypes.sizeof(ctypes.c_uint)
+        max_uint = (2 ** (size_of_unsigned_int * 8)) - 2
+        valid_data = {
+            "forward": {"a": {"b": {"c": max_uint}}},
+            "reverse": {"c": {"b": {"a": 1}}},
+        }
+        trie.load(valid_data)
+        self.assertDictEqual(trie.dump(), valid_data, "Trie should match loaded data")
+
+        with self.assertRaises(OverflowError):
+            trie.index_string("abcabc")
 
 
 if __name__ == "__main__":

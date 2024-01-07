@@ -27,7 +27,6 @@ void freeMarkovTrie(MarkovNode *root) {
     free(root);
 }
 
-
 static void PyMarkovTrie_dealloc(PyMarkovTrieObject *self) {
     freeMarkovTrie(self->forwardRoot);
     freeMarkovTrie(self->reverseRoot);
@@ -62,8 +61,13 @@ MarkovNode* getOrCreateChild(MarkovNode *node, char character, int debug) {
 }
 
 // Utility function to increment character count
-void incrementCharacterCount(MarkovNode *node, char character) {
-    node->characterCounts[(unsigned char)character]++;
+void incrementCharacterCount(MarkovNode *node, char character, int *overflowFlag) {
+    unsigned char index = (unsigned char)character;
+    if (node->characterCounts[index] == UINT_MAX) {
+        *overflowFlag = 1;  // Set the overflow flag
+        return;
+    }
+    node->characterCounts[index]++;
 }
 
 // Helper function to check if a char is a multi-byte UTF-8 character
@@ -83,6 +87,13 @@ static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *arg
     if (debug) {
         printf("Indexing string: %s\n", inputString);
     }
+
+    if (self->capacity_full) {
+        PyErr_SetString(PyExc_RuntimeError, "Trie capacity is full, cannot index more strings.");
+        return NULL;
+    }
+
+    int overflowFlag = 0;
 
     size_t length = strlen(inputString);
     if (length < 3) {
@@ -109,7 +120,13 @@ static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *arg
         if (firstNode == NULL) return NULL;
         MarkovNode *secondNode = getOrCreateChild(firstNode, inputString[i + 1], debug);
         if (secondNode == NULL) return NULL;
-        incrementCharacterCount(secondNode, inputString[i + 2]);
+        incrementCharacterCount(secondNode, inputString[i + 2], &overflowFlag);
+        if (overflowFlag) {
+            self->capacity_full = 1;  // Set the capacity_full flag of the trie
+            PyErr_SetString(PyExc_OverflowError, "Character count overflow occurred.");
+            return NULL;
+        }
+
 
         // Process the reverse trigram starting from the end of the string
         if (debug) {
@@ -121,7 +138,12 @@ static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *arg
         if (lastNode == NULL) return NULL;
         MarkovNode *secondLastNode = getOrCreateChild(lastNode, inputString[length - i - 2], debug);
         if (secondLastNode == NULL) return NULL;
-        incrementCharacterCount(secondLastNode, inputString[length - i - 3]);
+        incrementCharacterCount(secondLastNode, inputString[length - i - 3], &overflowFlag);
+        if (overflowFlag) {
+            self->capacity_full = 1;  // Set the capacity_full flag of the trie
+            PyErr_SetString(PyExc_OverflowError, "Character count overflow occurred.");
+            return NULL;
+        }
 
         trigramCount++;
     }
@@ -227,7 +249,7 @@ bool validateTrieDict(PyObject *dict) {
     return validateSubTrieDict(forwardDict) && validateSubTrieDict(reverseDict);
 }
 
-bool loadTrieFromDict(MarkovNode *node, PyObject *dict) {
+bool loadTrieFromDict(MarkovNode *node, PyObject *dict, int *capacityFullFlag) {
     PyObject *key, *value;
     Py_ssize_t pos = 0;
 
@@ -249,13 +271,22 @@ bool loadTrieFromDict(MarkovNode *node, PyObject *dict) {
         // If value is a dictionary, recurse
         if (PyDict_Check(value)) {
             node->children[(unsigned char)character] = createMarkovNode();
-            if (!node->children[(unsigned char)character] || !loadTrieFromDict(node->children[(unsigned char)character], value)) {
+            if (!node->children[(unsigned char)character] || !loadTrieFromDict(node->children[(unsigned char)character], value, capacityFullFlag)) {
                 return false;
             }
         }
         // If value is an integer, set the character count
         else if (PyLong_Check(value)) {
-            node->characterCounts[(unsigned char)character] = PyLong_AsLong(value);
+            unsigned long count = PyLong_AsUnsignedLong(value);
+            if (count > UINT_MAX) {
+                PyErr_SetString(PyExc_OverflowError, "Character count exceeds maximum capacity");
+                *capacityFullFlag = 1;
+                return false;
+            }
+            node->characterCounts[(unsigned char)character] = (unsigned int)count;
+            if (count == UINT_MAX) {
+                *capacityFullFlag = 1;
+            }
         } else {
             PyErr_SetString(PyExc_TypeError, "Trie values must be integers or dictionaries");
             return false;
@@ -286,27 +317,23 @@ static PyObject* load_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
         return NULL;
     }
 
-    // Clear existing Trie before loading new data
+    // Clear existing Trie and reset capacity_full flag
     freeMarkovTrie(self->forwardRoot);
     self->forwardRoot = createMarkovNode();
     freeMarkovTrie(self->reverseRoot);
     self->reverseRoot = createMarkovNode();
+    self->capacity_full = 0;
 
-    // Load forward Trie
-    if (!loadTrieFromDict(self->forwardRoot, forwardDict)) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to load forward Trie");
-        return NULL;
-    }
+    int capacityFullFlag = 0;
 
-    // Load reverse Trie
-    if (!loadTrieFromDict(self->reverseRoot, reverseDict)) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to load reverse Trie");
-        return NULL;
+    loadTrieFromDict(self->forwardRoot, forwardDict, &capacityFullFlag);
+    loadTrieFromDict(self->reverseRoot, reverseDict, &capacityFullFlag);
+    if (capacityFullFlag) {
+        self->capacity_full = 1;
     }
 
     Py_RETURN_NONE;
 }
-
 
 int is_whitespace(char c) {
     return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
@@ -384,7 +411,7 @@ PyObject *calculate_character_counts(MarkovNode *node, PyObject *trigram, const 
 
     // At this point, secondChild contains the counts we're interested in
     for (int i = 0; i < 256; ++i) {
-        int count = secondChild->characterCounts[i];
+        unsigned int count = secondChild->characterCounts[i];
         if (count > 0) {
             PyObject *charObj = PyUnicode_FromFormat("%c", (char)i);
             PyObject *countObj = PyLong_FromLong(count);

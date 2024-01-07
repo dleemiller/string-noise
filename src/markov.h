@@ -8,14 +8,15 @@
 #define MAX_DEPTH 3
 
 typedef struct MarkovNode {
-    struct MarkovNode *children[TRIE_NODE_SIZE]; // Existing children array
-    int characterCounts[TRIE_NODE_SIZE]; // Array for counting occurrences of Latin-1 characters
+    struct MarkovNode *children[TRIE_NODE_SIZE];
+    unsigned int characterCounts[TRIE_NODE_SIZE];
 } MarkovNode;
 
 typedef struct {
     PyObject_HEAD
-    MarkovNode *forwardRoot; // Root node for forward Trie
-    MarkovNode *reverseRoot; // Root node for reverse Trie
+    MarkovNode *forwardRoot;
+    MarkovNode *reverseRoot;
+    int capacity_full;  // Flag to indicate capacity overflow
 } PyMarkovTrieObject;
 
 MarkovNode* createMarkovNode(void);
