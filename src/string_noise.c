@@ -12,6 +12,7 @@ PyObject *AugmentationFailed;
 #include "random.h"
 #include "mask.h"
 #include "trie.h"
+#include "markov.h"
 
 
 // Method definitions
@@ -81,15 +82,6 @@ PyMODINIT_FUNC PyInit_string_noise(void) {
         Py_DECREF(module);
         return NULL;
     }
-    //if (PyType_Ready(&PyMarkovTreeType) < 0)
-    //    return NULL;
-    //
-    //Py_INCREF(&PyMarkovTreeType);
-    //if (PyModule_AddObject(module, "MarkovTree", (PyObject *)&PyMarkovTreeType) < 0) {
-    //    Py_DECREF(&PyMarkovTreeType);
-    //    Py_DECREF(module);
-    //    return NULL;
-    //}
 
     srand((unsigned int)time(NULL));  // Seed the random number generator
 

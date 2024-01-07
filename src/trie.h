@@ -30,20 +30,20 @@ typedef struct {
 // Function prototype for the PyTrie_lookup method
 extern PyTypeObject PyTrieType;
 PyObject* PyTrie_lookup(PyTrieObject *self, PyObject *args);
-
-typedef struct MarkovNode {
-    struct MarkovNode *children[TRIE_NODE_SIZE]; // Existing children array
-    int characterCounts[256]; // Array for counting occurrences of Latin-1 characters
-} MarkovNode;
-
-typedef struct {
-    PyObject_HEAD
-    MarkovNode *forwardRoot; // Root node for forward Trie
-    MarkovNode *reverseRoot; // Root node for reverse Trie
-} PyMarkovTrieObject;
-
-MarkovNode* createMarkovNode(void);
-extern PyTypeObject PyMarkovTrieType;
+// 
+// typedef struct MarkovNode {
+//     struct MarkovNode *children[TRIE_NODE_SIZE]; // Existing children array
+//     int characterCounts[TRIE_NODE_SIZE]; // Array for counting occurrences of Latin-1 characters
+// } MarkovNode;
+// 
+// typedef struct {
+//     PyObject_HEAD
+//     MarkovNode *forwardRoot; // Root node for forward Trie
+//     MarkovNode *reverseRoot; // Root node for reverse Trie
+// } PyMarkovTrieObject;
+// 
+// MarkovNode* createMarkovNode(void);
+// extern PyTypeObject PyMarkovTrieType;
 
 #endif // STRING_NOISE_TRIE_H
 
