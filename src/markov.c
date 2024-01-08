@@ -338,6 +338,7 @@ static PyObject* load_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
 int is_whitespace(char c) {
     return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
 }
+
 int is_multi_byte_unicode(const char *character) {
     if (!character) {
         return 0;
@@ -467,14 +468,33 @@ char randomly_select_character(PyObject *probabilities) {
 }
 
 
+void zeroOutWhitespaceCounts(PyObject *characterCounts) {
+    unsigned char c = 0;
+    do {
+        if (is_whitespace(c)) {
+            PyObject *whitespaceChar = PyUnicode_FromFormat("%c", c);
+            PyDict_SetItem(characterCounts, whitespaceChar, PyLong_FromLong(0));
+            Py_DECREF(whitespaceChar);
+        }
+        c++;
+    } while (c != 0);
+}
+
+
 static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, PyObject *kwds) {
     PyObject *inputString;
-    double probability = 0.5;  // Default probability
-    int debug = 0;             // Default debug flag
-    static char *kwlist[] = {"inputString", "probability", "debug", NULL};
+    double probability = 0.5;
+    int debug = 0;
+    int zero_whitespace = WHITESPACE_NONE; // Default to boundary
+    static char *kwlist[] = {"inputString", "probability", "debug", "zero_whitespace", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "U|dp", kwlist, &inputString, &probability, &debug)) {
-        return NULL; // Error in parsing arguments
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "U|dpb", kwlist, &inputString, &probability, &debug, &zero_whitespace)) {
+        return NULL;
+    }
+
+    if (zero_whitespace != WHITESPACE_NONE && zero_whitespace != WHITESPACE_ZERO && zero_whitespace != WHITESPACE_BOUNDARY) {
+        PyErr_SetString(PyExc_ValueError, "Invalid option for zero_whitespace");
+        return NULL;
     }
 
     if (probability < 0.0 || probability > 1.0) {
@@ -520,14 +540,72 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
         PyObject *characterCounts = calculate_character_counts(self->forwardRoot, forwardTrigram, "forward");
         PyDict_Update(characterCounts, calculate_character_counts(self->reverseRoot, reverseTrigram, "reverse"));
 
+        // Process zero_whitespace option
+        switch (zero_whitespace) {
+            case WHITESPACE_ZERO:
+                // Zero out counts for all whitespace characters in characterCounts
+                zeroOutWhitespaceCounts(characterCounts);
+                break;
+            case WHITESPACE_BOUNDARY:
+                if (!is_whitespace(*currentCharStr)) {
+                    // Check if current character is at a word boundary
+                    int atBoundary = 0;
+                    PyObject *prevChar = NULL;
+                    PyObject *nextChar = NULL;
+                    if (i > 0) {
+                        prevChar = PyUnicode_Substring(inputString, i - 1, i);
+                    }
+                    if (i < length - 1) {
+                        nextChar = PyUnicode_Substring(inputString, i + 1, i + 2);
+                    }
+
+                    if (debug) {
+                        printf("Debug: Current character '%s' at index %zd\n", currentCharStr, i);
+                        if (prevChar) printf("Debug: Previous character '%s'\n", PyUnicode_AsUTF8(prevChar));
+                        if (nextChar) printf("Debug: Next character '%s'\n", PyUnicode_AsUTF8(nextChar));
+                    }
+
+                    if (i == 0 || i == length - 1) {
+                        atBoundary = 1; // At the start or end of the string
+                    } else if ((prevChar && is_whitespace(*PyUnicode_AsUTF8(prevChar))) || 
+                               (nextChar && is_whitespace(*PyUnicode_AsUTF8(nextChar)))) {
+                        atBoundary = 1; // Adjacent to a whitespace character
+                    }
+
+                    if (debug && !atBoundary) {
+                        printf("Debug: Character '%s' at index %zd is not at a boundary.\n", currentCharStr, i);
+                    }
+
+                    if (!atBoundary) {
+                        // Zero out counts for all whitespace characters in characterCounts
+                        zeroOutWhitespaceCounts(characterCounts);
+                    }
+
+                    Py_XDECREF(prevChar);
+                    Py_XDECREF(nextChar);
+                }
+                break;
+            default:
+                // WHITESPACE_NONE: Do nothing
+                break;
+        }
+
         if (debug) {
             PyObject *countsStr = PyObject_Str(characterCounts);
             printf("Debug: Character counts: %s\n", PyUnicode_AsUTF8(countsStr));
             Py_DECREF(countsStr);
         }
 
-        // Check if there are any valid counts
-        if (PyDict_Size(characterCounts) == 0) {
+        // Calculate the sum of all counts in characterCounts
+        PyObject *key, *value;
+        Py_ssize_t pos = 0;
+        unsigned long sumOfCounts = 0;
+        while (PyDict_Next(characterCounts, &pos, &key, &value)) {
+            sumOfCounts += PyLong_AsUnsignedLong(value);
+        }
+
+        // Check if the sum of counts is zero
+        if (sumOfCounts == 0) {
             PyUnicode_AppendAndDel(&resultString, currentChar);
             continue; // No valid counts, append original character and continue
         }

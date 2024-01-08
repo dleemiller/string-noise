@@ -7,6 +7,10 @@
 #define TRIE_NODE_SIZE 256
 #define MAX_DEPTH 3
 
+#define WHITESPACE_NONE 0
+#define WHITESPACE_ZERO 1
+#define WHITESPACE_BOUNDARY 2
+
 typedef struct MarkovNode {
     struct MarkovNode *children[TRIE_NODE_SIZE];
     unsigned int characterCounts[TRIE_NODE_SIZE];
