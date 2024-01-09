@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include "markov.h"
 
+bool is_printable_latin1(char c) {
+    unsigned char uc = (unsigned char)c;
+    return (uc >= 32 && uc <= 126) || (uc >= 160 && uc <= 255);
+}
 
 MarkovNode* createMarkovNode(void) {
     MarkovNode *newNode = malloc(sizeof(MarkovNode));
@@ -111,6 +115,12 @@ static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *arg
             continue; // Skip trigrams with multi-byte characters
         }
 
+        if (!is_printable_latin1(inputString[i]) || 
+            !is_printable_latin1(inputString[i + 1]) || 
+            !is_printable_latin1(inputString[i + 2])) {
+            continue; // Skip non-printable Latin-1 characters
+        }
+
         if (debug) {
             printf("Processing forward trigram: %c%c%c\n", inputString[i], inputString[i + 1], inputString[i + 2]);
         }
@@ -158,7 +168,9 @@ void traverseMarkovNode(MarkovNode *node, PyObject *dict, int depth, int debug) 
     if (node == NULL || depth == 0) return;
 
     for (int i = 0; i < 256; i++) {
-        if (i > 127) break;
+        if (!is_printable_latin1((char)i)) {
+            continue; // Skip non-printable Latin-1 characters
+        }
 
         if (node->children[i] != NULL) {
             PyObject *childDict = PyDict_New();
@@ -381,45 +393,99 @@ PyObject *construct_trigram(PyObject *inputString, Py_ssize_t index, const char 
 }
 
 
+PyObject *calculate_character_counts(MarkovNode *node, PyObject *trigram, const char *direction, int debug) {
+    if (debug) {
+        printf("Calculating character counts for trigram in %s direction\n", direction);
+    }
 
-PyObject *calculate_character_counts(MarkovNode *node, PyObject *trigram, const char *direction) {
     PyObject *counts = PyDict_New();
     Py_ssize_t trigramSize = PyList_Size(trigram);
 
     if (trigramSize < 3) {
-        // Incomplete trigram, return zero counts
+        if (debug) {
+            printf("Incomplete trigram, returning zero counts\n");
+        }
         return counts;
     }
 
+    // Determine indices based on direction
+    int firstIndexPosition = (strcmp(direction, "forward") == 0) ? 0 : 2;
+    int secondIndexPosition = 1;
+
     // Extract the first two characters of the trigram for indexing
-    PyObject *firstCharObj = PyList_GetItem(trigram, strcmp(direction, "forward") == 0 ? 0 : 2);
-    PyObject *secondCharObj = PyList_GetItem(trigram, strcmp(direction, "forward") == 0 ? 1 : 1);
+    PyObject *firstCharObj = PyList_GetItem(trigram, firstIndexPosition);
+    PyObject *secondCharObj = PyList_GetItem(trigram, secondIndexPosition);
+
     const char *firstCharStr = PyUnicode_AsUTF8(firstCharObj);
     const char *secondCharStr = PyUnicode_AsUTF8(secondCharObj);
+
+    if (!firstCharStr || !secondCharStr) {
+        if (debug) {
+            printf("Error converting Python string objects to C strings\n");
+        }
+        Py_DECREF(counts);
+        return NULL;
+    }
+
+    if (debug) {
+        printf("Trigram characters: '%c', '%c'\n", firstCharStr[0], secondCharStr[0]);
+    }
 
     unsigned char firstIndex = (unsigned char)firstCharStr[0];
     unsigned char secondIndex = (unsigned char)secondCharStr[0];
 
     MarkovNode *firstChild = node->children[firstIndex];
     if (firstChild == NULL) {
+        if (debug) {
+            printf("First child node not found for '%c'\n", firstCharStr[0]);
+        }
         return counts; // Return zero counts if the path does not exist
     }
 
     MarkovNode *secondChild = firstChild->children[secondIndex];
     if (secondChild == NULL) {
+        if (debug) {
+            printf("Second child node not found for '%c'\n", secondCharStr[0]);
+        }
         return counts; // Return zero counts if the path does not exist
+    }
+
+    if (debug) {
+        printf("Counting characters at second child node\n");
     }
 
     // At this point, secondChild contains the counts we're interested in
     for (int i = 0; i < 256; ++i) {
+        if (!is_printable_latin1((char)i)) {
+            continue; // Skip non-printable Latin-1 characters
+        }
         unsigned int count = secondChild->characterCounts[i];
         if (count > 0) {
-            PyObject *charObj = PyUnicode_FromFormat("%c", (char)i);
+            //PyObject *charObj = PyUnicode_FromFormat("%c", (char)i);
+            PyObject *charObj = PyUnicode_FromOrdinal((unsigned char)i);
             PyObject *countObj = PyLong_FromLong(count);
+
+            if (!charObj || !countObj) {
+                if (debug) {
+                    printf("Error creating Python objects for character '%c' %d\n", (char)i, i);
+                }
+                Py_XDECREF(charObj);
+                Py_XDECREF(countObj);
+                Py_DECREF(counts);
+                return NULL;
+            }
+
             PyDict_SetItem(counts, charObj, countObj);
+            if (debug) {
+                printf("Added count %u for character '%c'\n", count, (char)i);
+            }
             Py_DECREF(charObj);
             Py_DECREF(countObj);
         }
+    }
+
+    if (debug) {
+        printf("Finished counting characters\n");
     }
 
     return counts;
@@ -437,6 +503,10 @@ PyObject *normalize_counts_to_probabilities(PyObject *counts) {
         total += PyLong_AsLong(value);
     }
 
+    if (total == 0) {
+        return probabilities;
+    }
+
     // Normalize counts
     pos = 0;
     while (PyDict_Next(counts, &pos, &key, &value)) {
@@ -448,6 +518,34 @@ PyObject *normalize_counts_to_probabilities(PyObject *counts) {
 
     return probabilities;
 }
+
+PyObject *normalize_probabilities(PyObject *probabilities) {
+    PyObject *normalizedProbabilities = PyDict_New();
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    double total = 0.0;
+
+    // Calculate total probability
+    while (PyDict_Next(probabilities, &pos, &key, &value)) {
+        total += PyFloat_AsDouble(value);
+    }
+
+    if (total == 0.0) {
+        return normalizedProbabilities;
+    }
+
+    // Normalize probabilities
+    pos = 0;
+    while (PyDict_Next(probabilities, &pos, &key, &value)) {
+        double normalizedProbability = PyFloat_AsDouble(value) / total;
+        PyObject *normalizedProbObj = PyFloat_FromDouble(normalizedProbability);
+        PyDict_SetItem(normalizedProbabilities, key, normalizedProbObj);
+        Py_DECREF(normalizedProbObj);
+    }
+
+    return normalizedProbabilities;
+}
+
 
 char randomly_select_character(PyObject *probabilities) {
     PyObject *key, *value;
@@ -484,11 +582,13 @@ void zeroOutWhitespaceCounts(PyObject *characterCounts) {
 static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, PyObject *kwds) {
     PyObject *inputString;
     double probability = 0.5;
-    int debug = 0;
+    double reverse_weight = 1.0;
+    Py_ssize_t stride = 1;
+    int debug = 0, seed = -1;
     int zero_whitespace = WHITESPACE_NONE; // Default to boundary
-    static char *kwlist[] = {"inputString", "probability", "debug", "zero_whitespace", NULL};
+    static char *kwlist[] = {"inputString", "probability", "reverse_weight", "stride", "debug", "zero_whitespace", "seed", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "U|dpb", kwlist, &inputString, &probability, &debug, &zero_whitespace)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "U|ddnpbi", kwlist, &inputString, &probability, &reverse_weight, &stride, &debug, &zero_whitespace, &seed)) {
         return NULL;
     }
 
@@ -502,16 +602,41 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
         return NULL;
     }
 
+    if (reverse_weight < 0.0) {
+        PyErr_SetString(PyExc_ValueError, "Reverse weight must be >= 0");
+        return NULL;
+    }
+
+    // Ensure stride is greater than or equal to 1
+    if (stride < 1) {
+        PyErr_SetString(PyExc_ValueError, "stride must be greater than or equal to 1");
+        return NULL;
+    }
+
+    // Seed the random number generator
+    if (seed == -1) {
+        srand((unsigned int)clock());
+    } else {
+        srand((unsigned int)seed);
+    }
+
     if (debug) {
         printf("Debug: Replacing string with probability: %f\n", probability);
     }
 
     Py_ssize_t length = PyUnicode_GetLength(inputString);
     PyObject *resultString = PyUnicode_FromString("");
-
+    Py_ssize_t skip = 0;
     for (Py_ssize_t i = 0; i < length; i++) {
         PyObject *currentChar = PyUnicode_Substring(inputString, i, i + 1);
         const char *currentCharStr = PyUnicode_AsUTF8(currentChar);
+        if (skip > 0) {
+            skip--;
+            PyUnicode_AppendAndDel(&resultString, currentChar);
+            continue;
+        } else if (stride > 1) {
+            skip = stride - 1;
+        }
 
         if (((double)rand() / RAND_MAX) > probability) {
             PyUnicode_AppendAndDel(&resultString, currentChar);
@@ -529,7 +654,7 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
         }
 
         // Construct and validate trigrams
-        PyObject *forwardTrigram = construct_trigram(inputString, i, "forward");
+        PyObject *forwardTrigram = construct_trigram(resultString, i, "forward");
         PyObject *reverseTrigram = construct_trigram(inputString, i, "reverse");
         
         if (debug) {
@@ -537,14 +662,34 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
             printf("Debug: Reverse trigram at position %zd: %s\n", i, PyUnicode_AsUTF8(PyObject_Str(reverseTrigram)));
         }
 
-        PyObject *characterCounts = calculate_character_counts(self->forwardRoot, forwardTrigram, "forward");
-        PyDict_Update(characterCounts, calculate_character_counts(self->reverseRoot, reverseTrigram, "reverse"));
+        PyObject *forwardCounts = calculate_character_counts(self->forwardRoot, forwardTrigram, "forward", debug);
+        if (!forwardCounts) {
+            if (debug) {
+                printf("Failed to calculate character counts for forward trigram\n");
+            }
+            Py_DECREF(forwardTrigram);
+            Py_DECREF(reverseTrigram);
+            continue;
+        }
+        
+        PyObject *reverseCounts = calculate_character_counts(self->reverseRoot, reverseTrigram, "reverse", debug);
+        if (!reverseCounts) {
+            if (debug) {
+                printf("Failed to calculate character counts for reverse trigram\n");
+            }
+            Py_DECREF(forwardTrigram);
+            Py_DECREF(reverseTrigram);
+            Py_DECREF(forwardCounts);
+            continue;
+        }
+        
 
         // Process zero_whitespace option
         switch (zero_whitespace) {
             case WHITESPACE_ZERO:
                 // Zero out counts for all whitespace characters in characterCounts
-                zeroOutWhitespaceCounts(characterCounts);
+                zeroOutWhitespaceCounts(forwardCounts);
+                zeroOutWhitespaceCounts(reverseCounts);
                 break;
             case WHITESPACE_BOUNDARY:
                 if (!is_whitespace(*currentCharStr)) {
@@ -578,7 +723,8 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
 
                     if (!atBoundary) {
                         // Zero out counts for all whitespace characters in characterCounts
-                        zeroOutWhitespaceCounts(characterCounts);
+                        zeroOutWhitespaceCounts(forwardCounts);
+                        zeroOutWhitespaceCounts(reverseCounts);
                     }
 
                     Py_XDECREF(prevChar);
@@ -590,28 +736,59 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
                 break;
         }
 
-        if (debug) {
-            PyObject *countsStr = PyObject_Str(characterCounts);
-            printf("Debug: Character counts: %s\n", PyUnicode_AsUTF8(countsStr));
-            Py_DECREF(countsStr);
-        }
-
-        // Calculate the sum of all counts in characterCounts
+        // Calculate the sum of all counts in forwardCounts and reverseCounts
         PyObject *key, *value;
         Py_ssize_t pos = 0;
         unsigned long sumOfCounts = 0;
-        while (PyDict_Next(characterCounts, &pos, &key, &value)) {
+        
+        // Calculate sum for forward counts
+        pos = 0;
+        while (PyDict_Next(forwardCounts, &pos, &key, &value)) {
             sumOfCounts += PyLong_AsUnsignedLong(value);
         }
-
-        // Check if the sum of counts is zero
+        
+        // Calculate sum for reverse counts
+        pos = 0;
+        while (PyDict_Next(reverseCounts, &pos, &key, &value)) {
+            sumOfCounts += PyLong_AsUnsignedLong(value);
+        }
+        
+        // Check if the combined sum of counts is zero
         if (sumOfCounts == 0) {
             PyUnicode_AppendAndDel(&resultString, currentChar);
             continue; // No valid counts, append original character and continue
         }
 
+        PyObject *normalizedForward = normalize_counts_to_probabilities(forwardCounts);
+        PyObject *normalizedReverse = normalize_counts_to_probabilities(reverseCounts);
+        
+        // Combine the probabilities from forward and reverse trigrams
+        PyObject *combinedProbabilities = PyDict_Copy(normalizedForward); // Create a copy of the normalized forward probabilities
+        
+        if (combinedProbabilities == NULL) {
+            // Handle error: Failed to copy the dictionary
+            Py_DECREF(normalizedForward);
+            Py_DECREF(normalizedReverse);
+            return NULL;
+        }
+
+        // Add probabilities from reverse trigram, combining with existing ones if necessary
+        pos = 0;
+        while (PyDict_Next(normalizedReverse, &pos, &key, &value)) {
+            PyObject *existingValue = PyDict_GetItem(combinedProbabilities, key);
+            if (existingValue) {
+                double combinedProbability = reverse_weight * PyFloat_AsDouble(value) + PyFloat_AsDouble(existingValue);
+                PyObject *newProb = PyFloat_FromDouble(combinedProbability);
+                PyDict_SetItem(combinedProbabilities, key, newProb);
+                Py_DECREF(newProb);
+            } else {
+                PyDict_SetItem(combinedProbabilities, key, value);
+            }
+        }
+
+
         // Normalize counts to probabilities and select replacement character
-        PyObject *normalizedProbabilities = normalize_counts_to_probabilities(characterCounts);
+        PyObject *normalizedProbabilities = normalize_probabilities(combinedProbabilities);
         
         if (debug) {
             PyObject *probStr = PyObject_Str(normalizedProbabilities);
@@ -634,8 +811,11 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
         Py_DECREF(currentChar);
         Py_DECREF(forwardTrigram);
         Py_DECREF(reverseTrigram);
-        Py_DECREF(characterCounts);
-        Py_DECREF(normalizedProbabilities);
+        Py_DECREF(forwardCounts);
+        Py_DECREF(reverseCounts);
+        Py_DECREF(normalizedForward);
+        Py_DECREF(normalizedReverse);
+        Py_DECREF(combinedProbabilities);
     }
 
     if (debug) {
