@@ -112,6 +112,14 @@ class LazyNoise:
         """
         return load_moe_mispelling()
 
+    @cached_property
+    def markov(self):
+        """
+        Uses bidirectional character trigrams to perform statistical replacements,
+        based on english text.
+        """
+        return load_markov_en()
+
     @staticmethod
     def random(
         original_string: str,

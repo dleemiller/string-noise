@@ -4,7 +4,34 @@ import random
 import re
 import importlib.resources
 from ..string_noise import augment_string, normalize, build_tree
-from ..string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING
+from ..string_noise import (
+    SHUFFLE,
+    RESHUFFLE,
+    ASCENDING,
+    DESCENDING,
+    WHITESPACE_NONE,
+    WHITESPACE_ZERO,
+    WHITESPACE_BOUNDARY,
+)
+from ..string_noise import MarkovTrie
+
+
+def load_json(resource_package, resource_path):
+    if resource_package is None:
+        assert os.path.exists(resource_path)
+        with open(resource_path, "r") as file:
+            json_data = json.load(file)
+    else:
+        resource = importlib.resources.files(resource_package) / resource_path
+        # Check if the file is gzipped
+        if resource_path.endswith(".gz"):
+            with gzip.open(resource, "rt") as file:
+                json_data = json.load(file)
+        else:
+            with resource.open("r") as file:
+                json_data = json.load(file)
+
+    return json_data
 
 
 class Mapper:
@@ -37,19 +64,7 @@ class Mapper:
 
     @classmethod
     def load(cls, resource_package, resource_path):
-        if resource_package is None:
-            assert os.path.exists(resource_path)
-            with open(resource_path, "r") as file:
-                json_data = json.load(file)
-        else:
-            resource = importlib.resources.files(resource_package) / resource_path
-            # Check if the file is gzipped
-            if resource_path.endswith(".gz"):
-                with gzip.open(resource, "rt") as file:
-                    json_data = json.load(file)
-            else:
-                with resource.open("r") as file:
-                    json_data = json.load(file)
+        json_data = load_json(resource_package, resource_path)
         return cls(json_data)
 
     def __call__(
@@ -79,7 +94,7 @@ class TrieMapper(Mapper):
     def tree(self):
         return self.__tree
 
-    def random_replace(self, text, probability=0.5, seed=None):
+    def random_replace(self, text: str, probability: float = 0.5, seed: int = None):
         if seed is not None:
             random.seed(seed)
 
@@ -103,5 +118,39 @@ class TrieMapper(Mapper):
             return new_word.title()
         return new_word.lower()
 
-    def __call__(self, text: str, probability: float = 1.0, debug=False, seed=None):
-        return self.random_replace(text, probability, seed)
+    def __call__(self, *args, **kwargs):
+        return self.random_replace(*args, **kwargs)
+
+
+class MarkovTrieMapper:
+    def __init__(self, json_data):
+        self.__tree = MarkovTrie()
+        self.__tree.load(json_data)  # load the
+
+    @property
+    def tree(self):
+        return self.__tree
+
+    def replace(
+        self,
+        text,
+        probability=0.5,
+        reverse_weight=1,
+        zero_whitespace=WHITESPACE_ZERO,
+        seed=-1,
+    ):
+        return self.tree.replace(
+            text,
+            probability=probability,
+            seed=seed,
+            reverse_weight=reverse_weight,
+            zero_whitespace=zero_whitespace,
+        )
+
+    @classmethod
+    def load(cls, resource_package, resource_path):
+        json_data = load_json(resource_package, resource_path)
+        return cls(json_data)
+
+    def __call__(self, *args, **kwargs):
+        return self.replace(*args, **kwargs)
