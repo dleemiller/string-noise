@@ -4,7 +4,7 @@
 #include <Python.h>
 #include <stdbool.h>
 
-#define TRIE_NODE_SIZE 256
+#define MTRIE_NODE_SIZE 256
 #define MAX_DEPTH 3
 
 #define WHITESPACE_NONE 0
@@ -12,8 +12,9 @@
 #define WHITESPACE_BOUNDARY 2
 
 typedef struct MarkovNode {
-    struct MarkovNode *children[TRIE_NODE_SIZE];
-    unsigned int characterCounts[TRIE_NODE_SIZE];
+    struct MarkovNode *children[MTRIE_NODE_SIZE];
+    unsigned int characterCounts[MTRIE_NODE_SIZE];
+    int id;
 } MarkovNode;
 
 typedef struct {
@@ -21,6 +22,7 @@ typedef struct {
     MarkovNode *forwardRoot;
     MarkovNode *reverseRoot;
     int capacity_full;  // Flag to indicate capacity overflow
+    int depth;
 } PyMarkovTrieObject;
 
 MarkovNode* createMarkovNode(void);

@@ -96,7 +96,7 @@ class TestTrie(unittest.TestCase):
         count = trie.index_string("")
         self.assertEqual(count, 0)  # Empty string
 
-        count = trie.index_string("абв")  # Non-Latin characters
+        count = trie.index_string("абв", debug=False)  # Non-Latin characters
         self.assertEqual(count, 0)
 
     def test_dump_empty_trie(self):
@@ -106,8 +106,8 @@ class TestTrie(unittest.TestCase):
 
     def test_dump_populated_trie(self):
         trie = MarkovTrie()
-        trie.index_string("abc")
-        dumped = trie.dump()
+        trie.index_string("abc", debug=False)
+        dumped = trie.dump(debug=False)
         self.assertDictEqual(
             dumped,
             {"forward": {"a": {"b": {"c": 1}}}, "reverse": {"c": {"b": {"a": 1}}}},

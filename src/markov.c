@@ -4,9 +4,10 @@
 #include <stdbool.h>
 #include "markov.h"
 
-bool is_printable_latin1(char c) {
-    unsigned char uc = (unsigned char)c;
-    return (uc >= 32 && uc <= 126) || (uc >= 160 && uc <= 255);
+static int lastNodeId = 0;
+
+bool is_printable_latin1(unsigned char c) {
+    return (c >= 32 && c <= 126);
 }
 
 MarkovNode* createMarkovNode(void) {
@@ -15,15 +16,17 @@ MarkovNode* createMarkovNode(void) {
         return NULL; // Handle memory allocation failure
     }
     memset(newNode->characterCounts, 0, sizeof(newNode->characterCounts)); // Initialize counts to 0
-    for (int i = 0; i < TRIE_NODE_SIZE; i++) {
+    for (int i = 0; i < MTRIE_NODE_SIZE; i++) {
         newNode->children[i] = NULL;
     }
+
+    newNode->id = lastNodeId++;
     return newNode;
 }
 
 void freeMarkovTrie(MarkovNode *root) {
     if (root == NULL) return;
-    for (int i = 0; i < TRIE_NODE_SIZE; i++) {
+    for (int i = 0; i < MTRIE_NODE_SIZE; i++) {
         if (root->children[i]) {
             freeMarkovTrie(root->children[i]);
         }
@@ -47,13 +50,16 @@ MarkovNode* getOrCreateChild(MarkovNode *node, char character, int debug) {
     }
 
     if (debug) {
-        printf("Accessing child for character %c\n", character);
+        printf("Accessing child for character '%c'\n", character);
     }
     if (node->children[(unsigned char)character] == NULL) {
         if (debug) {
             printf("Creating new child node for character %c\n", character);
         }
         node->children[(unsigned char)character] = createMarkovNode();
+        if (debug) {
+            printf("Assigned ID %d to new child node for character %c\n", node->children[(unsigned char)character]->id, character);
+        }
         if (node->children[(unsigned char)character] == NULL) {
             if (debug) {
                 printf("Failed to create child node for character %c\n", character);
@@ -65,11 +71,14 @@ MarkovNode* getOrCreateChild(MarkovNode *node, char character, int debug) {
 }
 
 // Utility function to increment character count
-void incrementCharacterCount(MarkovNode *node, char character, int *overflowFlag) {
+void incrementCharacterCount(MarkovNode *node, char character, int *overflowFlag, int debug) {
     unsigned char index = (unsigned char)character;
     if (node->characterCounts[index] == UINT_MAX) {
         *overflowFlag = 1;  // Set the overflow flag
         return;
+    }
+    if (debug) {
+        printf("Increment %d %c\n", index, index);
     }
     node->characterCounts[index]++;
 }
@@ -80,16 +89,35 @@ bool isMultiByteChar(char c) {
     return (c & 0x80) != 0;
 }
 
-static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
-    const char *inputString;
-    int debug = 0;  // Default value for debug flag
+// Helper functions for character validation and processing
+static int is_valid_character(char c) {
+    // Assuming these functions check if the character is a valid multi-byte character or a printable Latin-1 character
+    int valid = !isMultiByteChar(c) || is_printable_latin1(c);
+    return valid;
+}
 
-    if (!PyArg_ParseTuple(args, "s|p", &inputString, &debug)) {
-        return NULL; // Error in parsing arguments
+
+static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, PyObject *kwds) {
+    PyObject *inputStringObj;
+    int debug = 0;
+
+    static char *kwlist[] = {"inputString", "debug", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "U|p", kwlist, &inputStringObj, &debug)) {
+        return NULL;
     }
 
+    int depth = self->depth;
+    Py_ssize_t length = PyUnicode_GetLength(inputStringObj);
+
     if (debug) {
-        printf("Indexing string: %s\n", inputString);
+        const char *inputString = PyUnicode_AsUTF8(inputStringObj);
+        printf("Received string: %s, depth: %d\n", inputString, depth);
+        printf("Input string length: %zu\n", length);
+    }
+
+    if (depth < 2) {
+        PyErr_SetString(PyExc_ValueError, "Depth must be at least 2.");
+        return NULL;
     }
 
     if (self->capacity_full) {
@@ -97,78 +125,107 @@ static PyObject* index_string_MarkovTrie(PyMarkovTrieObject *self, PyObject *arg
         return NULL;
     }
 
-    int overflowFlag = 0;
-
-    size_t length = strlen(inputString);
-    if (length < 3) {
+    if (length < depth) {
         if (debug) {
-            printf("String too short for trigram processing. Length: %zu\n", length);
+            printf("String too short for processing. Required length: %d, Actual length: %zu\n", depth, length);
         }
         return PyLong_FromLong(0);
     }
 
-    int trigramCount = 0;
-    for (size_t i = 0; i < length - 2; i++) {
-        if (isMultiByteChar(inputString[i]) || 
-            isMultiByteChar(inputString[i + 1]) || 
-            isMultiByteChar(inputString[i + 2])) {
-            continue; // Skip trigrams with multi-byte characters
-        }
+    int sequenceCount = 0;
+    int overflowFlag = 0;
 
-        if (!is_printable_latin1(inputString[i]) || 
-            !is_printable_latin1(inputString[i + 1]) || 
-            !is_printable_latin1(inputString[i + 2])) {
-            continue; // Skip non-printable Latin-1 characters
-        }
-
+    for (Py_ssize_t i = 0; i <= length - depth; i++) {
         if (debug) {
-            printf("Processing forward trigram: %c%c%c\n", inputString[i], inputString[i + 1], inputString[i + 2]);
+            printf("Processing sequence starting at index %zu\n", i);
         }
 
         // Forward indexing
-        MarkovNode *firstNode = getOrCreateChild(self->forwardRoot, inputString[i], debug);
-        if (firstNode == NULL) return NULL;
-        MarkovNode *secondNode = getOrCreateChild(firstNode, inputString[i + 1], debug);
-        if (secondNode == NULL) return NULL;
-        incrementCharacterCount(secondNode, inputString[i + 2], &overflowFlag);
-        if (overflowFlag) {
-            self->capacity_full = 1;  // Set the capacity_full flag of the trie
-            PyErr_SetString(PyExc_OverflowError, "Character count overflow occurred.");
-            return NULL;
+        MarkovNode *currentNode = self->forwardRoot;
+        int validSequence = 1;
+        for (int j = 0; j < depth - 1; j++) {
+            PyObject *charObj = PyUnicode_Substring(inputStringObj, i + j, i + j + 1);
+            if (charObj == NULL || !PyUnicode_Check(charObj) || PyUnicode_GetLength(charObj) != 1) {
+                Py_XDECREF(charObj);
+                validSequence = 0;
+                break;
+            }
+            const char *charStr = PyUnicode_AsUTF8(charObj);
+            if (!is_valid_character(charStr[0])) {
+                Py_DECREF(charObj);
+                validSequence = 0;
+                break;
+            }
+            currentNode = getOrCreateChild(currentNode, charStr[0], debug);
+            Py_DECREF(charObj);
+            if (currentNode == NULL) {
+                validSequence = 0;
+                break;
+            }
         }
-
-
-        // Process the reverse trigram starting from the end of the string
-        if (debug) {
-            printf("Processing reverse trigram: %c%c%c\n", inputString[length - i - 1], inputString[length - i - 2], inputString[length - i - 3]);
+        if (validSequence && currentNode != NULL) {
+            PyObject *lastCharObj = PyUnicode_Substring(inputStringObj, i + depth - 1, i + depth);
+            const char *lastCharStr = PyUnicode_AsUTF8(lastCharObj);
+            incrementCharacterCount(currentNode, lastCharStr[0], &overflowFlag, debug);
+            Py_DECREF(lastCharObj);
+            if (overflowFlag) {
+                self->capacity_full = 1;
+                PyErr_SetString(PyExc_OverflowError, "Character count overflow occurred.");
+                return NULL;
+            }
         }
 
         // Reverse indexing
-        MarkovNode *lastNode = getOrCreateChild(self->reverseRoot, inputString[length - i - 1], debug);
-        if (lastNode == NULL) return NULL;
-        MarkovNode *secondLastNode = getOrCreateChild(lastNode, inputString[length - i - 2], debug);
-        if (secondLastNode == NULL) return NULL;
-        incrementCharacterCount(secondLastNode, inputString[length - i - 3], &overflowFlag);
-        if (overflowFlag) {
-            self->capacity_full = 1;  // Set the capacity_full flag of the trie
-            PyErr_SetString(PyExc_OverflowError, "Character count overflow occurred.");
-            return NULL;
+        currentNode = self->reverseRoot;
+        validSequence = 1;
+        for (int j = 0; j < depth - 1; j++) {
+            PyObject *charObj = PyUnicode_Substring(inputStringObj, length - i - j - 1, length - i - j);
+            if (charObj == NULL || !PyUnicode_Check(charObj) || PyUnicode_GetLength(charObj) != 1) {
+                Py_XDECREF(charObj);
+                validSequence = 0;
+                break;
+            }
+            const char *charStr = PyUnicode_AsUTF8(charObj);
+            if (!is_valid_character(charStr[0])) {
+                Py_DECREF(charObj);
+                validSequence = 0;
+                break;
+            }
+
+            currentNode = getOrCreateChild(currentNode, charStr[0], debug);
+            Py_DECREF(charObj);
+            if (currentNode == NULL) {
+                validSequence = 0;
+                break;
+            }
+        }
+        if (validSequence && currentNode != NULL) {
+            PyObject *lastCharObj = PyUnicode_Substring(inputStringObj, i, i + 1);
+            const char *lastCharStr = PyUnicode_AsUTF8(lastCharObj);
+            incrementCharacterCount(currentNode, lastCharStr[0], &overflowFlag, debug);
+            Py_DECREF(lastCharObj);
+            if (overflowFlag) {
+                self->capacity_full = 1;
+                PyErr_SetString(PyExc_OverflowError, "Character count overflow occurred.");
+                return NULL;
+            }
         }
 
-        trigramCount++;
+        sequenceCount += validSequence;
     }
 
     if (debug) {
-        printf("Indexed %d trigrams\n", trigramCount);
+        printf("Indexed %d sequences of depth %d\n", sequenceCount, depth);
     }
-    return PyLong_FromLong(trigramCount);
+    return PyLong_FromLong(sequenceCount);
 }
+
 
 void traverseMarkovNode(MarkovNode *node, PyObject *dict, int depth, int debug) {
     if (node == NULL || depth == 0) return;
 
     for (int i = 0; i < 256; i++) {
-        if (!is_printable_latin1((char)i)) {
+        if (!is_printable_latin1((unsigned char)i)) {
             continue; // Skip non-printable Latin-1 characters
         }
 
@@ -196,12 +253,12 @@ void traverseMarkovNode(MarkovNode *node, PyObject *dict, int depth, int debug) 
     }
 }
 
-static PyObject* dump_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
+static PyObject* dump_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, PyObject *kwds) {
     int debug = 0;  // Default value for debug flag
 
-    // Parse the optional debug argument
-    if (!PyArg_ParseTuple(args, "|p", &debug)) {
-        return NULL; // Error in parsing arguments
+    static char *kwlist[] = {"debug", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|p", kwlist, &debug)) {
+        return NULL;
     }
 
     PyObject *result = PyDict_New();
@@ -210,10 +267,10 @@ static PyObject* dump_MarkovTrie(PyMarkovTrieObject *self, PyObject *args) {
 
     // Traverse for forward and reverse mappings with debug flag
     if (self->forwardRoot != NULL) {
-        traverseMarkovNode(self->forwardRoot, forwardDict, MAX_DEPTH, debug);
+        traverseMarkovNode(self->forwardRoot, forwardDict, self->depth, 0);
     }
     if (self->reverseRoot != NULL) {
-        traverseMarkovNode(self->reverseRoot, reverseDict, MAX_DEPTH, debug);
+        traverseMarkovNode(self->reverseRoot, reverseDict, self->depth, debug);
     }
 
     PyDict_SetItemString(result, "forward", forwardDict);
@@ -359,115 +416,116 @@ int is_multi_byte_unicode(const char *character) {
 }
 
 
-PyObject *construct_trigram(PyObject *inputString, Py_ssize_t index, const char *direction) {
-    PyObject *trigram = PyList_New(0);
+PyObject *construct_ngram(PyObject *inputString, Py_ssize_t index, const char *direction, int depth) {
+    PyObject *ngram = PyList_New(0);
     Py_ssize_t length = PyUnicode_GetLength(inputString);
 
-    if (strcmp(direction, "forward") == 0 && index >= 2) {
-        for (Py_ssize_t i = index - 2; i <= index; ++i) {
+    if (strcmp(direction, "forward") == 0 && index >= depth - 1) {
+        for (Py_ssize_t i = index - depth + 1; i <= index; ++i) {
             PyObject *charObj = PyUnicode_Substring(inputString, i, i + 1);
             const char *charStr = PyUnicode_AsUTF8(charObj);
             if (is_multi_byte_unicode(charStr)) {
                 Py_DECREF(charObj);
-                Py_DECREF(trigram);
-                return PyList_New(0); // Return empty trigram if multi-byte character found
+                Py_DECREF(ngram);
+                return PyList_New(0); // Return empty ngram if multi-byte character found
             }
-            PyList_Append(trigram, charObj);
+            PyList_Append(ngram, charObj);
             Py_DECREF(charObj);
         }
-    } else if (strcmp(direction, "reverse") == 0 && index <= length - 3) {
-        for (Py_ssize_t i = index; i <= index + 2; ++i) {
+    } else if (strcmp(direction, "reverse") == 0 && index <= length - depth) {
+        for (Py_ssize_t i = index; i < index + depth; ++i) {
             PyObject *charObj = PyUnicode_Substring(inputString, i, i + 1);
             const char *charStr = PyUnicode_AsUTF8(charObj);
             if (is_multi_byte_unicode(charStr)) {
                 Py_DECREF(charObj);
-                Py_DECREF(trigram);
-                return PyList_New(0); // Return empty trigram if multi-byte character found
+                Py_DECREF(ngram);
+                return PyList_New(0); // Return empty ngram if multi-byte character found
             }
-            PyList_Append(trigram, charObj);
+            PyList_Append(ngram, charObj);
             Py_DECREF(charObj);
         }
     }
 
-    return trigram;
+    return ngram;
 }
 
 
-PyObject *calculate_character_counts(MarkovNode *node, PyObject *trigram, const char *direction, int debug) {
+PyObject *calculate_character_counts(MarkovNode *node, PyObject *ngram, int depth, const char *direction, int debug) {
     if (debug) {
-        printf("Calculating character counts for trigram in %s direction\n", direction);
+        printf("Calculating character counts for ngram in %s direction\n", direction);
     }
 
     PyObject *counts = PyDict_New();
-    Py_ssize_t trigramSize = PyList_Size(trigram);
+    Py_ssize_t ngramSize = PyList_Size(ngram);
 
-    if (trigramSize < 3) {
+    if (ngramSize != depth) {
         if (debug) {
-            printf("Incomplete trigram, returning zero counts\n");
+            printf("Incomplete ngram, returning zero counts\n");
         }
         return counts;
     }
 
-    // Determine indices based on direction
-    int firstIndexPosition = (strcmp(direction, "forward") == 0) ? 0 : 2;
-    int secondIndexPosition = 1;
-
-    // Extract the first two characters of the trigram for indexing
-    PyObject *firstCharObj = PyList_GetItem(trigram, firstIndexPosition);
-    PyObject *secondCharObj = PyList_GetItem(trigram, secondIndexPosition);
-
-    const char *firstCharStr = PyUnicode_AsUTF8(firstCharObj);
-    const char *secondCharStr = PyUnicode_AsUTF8(secondCharObj);
-
-    if (!firstCharStr || !secondCharStr) {
-        if (debug) {
-            printf("Error converting Python string objects to C strings\n");
+    MarkovNode *currentNode = node;
+    if (strcmp(direction, "forward") == 0) {
+        for (int i = 0; i < depth - 1; ++i) {
+            PyObject *charObj = PyList_GetItem(ngram, i);
+            const char *charStr = PyUnicode_AsUTF8(charObj);
+            if (!charStr) {
+                if (debug) {
+                    printf("Error converting Python string object to C string at index %d\n", i);
+                }
+                Py_DECREF(counts);
+                return NULL;
+            }
+            
+            unsigned char index = (unsigned char)charStr[0];
+            currentNode = currentNode->children[index];
+            if (currentNode == NULL) {
+                if (debug) {
+                    printf("Child node not found for '%c' at depth %d\n", charStr[0], i + 1);
+                }
+                return counts; // Return zero counts if the path does not exist
+            }
         }
-        Py_DECREF(counts);
-        return NULL;
+    } else if (strcmp(direction, "reverse") == 0) {
+        for (int i = depth - 1; i > 0; --i) {
+            PyObject *charObj = PyList_GetItem(ngram, i);
+            const char *charStr = PyUnicode_AsUTF8(charObj);
+            if (!charStr) {
+                if (debug) {
+                    printf("Error converting Python string object to C string at index %d\n", i);
+                }
+                Py_DECREF(counts);
+                return NULL;
+            }
+
+            unsigned char index = (unsigned char)charStr[0];
+            currentNode = currentNode->children[index];
+            if (currentNode == NULL) {
+                if (debug) {
+                    printf("Child node not found for '%c' at depth %d\n", charStr[0], i);
+                }
+                return counts; // Return zero counts if the path does not exist
+            }
+        }
     }
 
     if (debug) {
-        printf("Trigram characters: '%c', '%c'\n", firstCharStr[0], secondCharStr[0]);
+        printf("Counting characters at the last node of the ngram\n");
     }
 
-    unsigned char firstIndex = (unsigned char)firstCharStr[0];
-    unsigned char secondIndex = (unsigned char)secondCharStr[0];
-
-    MarkovNode *firstChild = node->children[firstIndex];
-    if (firstChild == NULL) {
-        if (debug) {
-            printf("First child node not found for '%c'\n", firstCharStr[0]);
-        }
-        return counts; // Return zero counts if the path does not exist
-    }
-
-    MarkovNode *secondChild = firstChild->children[secondIndex];
-    if (secondChild == NULL) {
-        if (debug) {
-            printf("Second child node not found for '%c'\n", secondCharStr[0]);
-        }
-        return counts; // Return zero counts if the path does not exist
-    }
-
-    if (debug) {
-        printf("Counting characters at second child node\n");
-    }
-
-    // At this point, secondChild contains the counts we're interested in
+    // currentNode now points to the last node of the ngram
     for (int i = 0; i < 256; ++i) {
-        if (!is_printable_latin1((char)i)) {
+        if (!is_printable_latin1((unsigned char)i)) {
             continue; // Skip non-printable Latin-1 characters
         }
-        unsigned int count = secondChild->characterCounts[i];
+        unsigned int count = currentNode->characterCounts[i];
         if (count > 0) {
-            //PyObject *charObj = PyUnicode_FromFormat("%c", (char)i);
             PyObject *charObj = PyUnicode_FromOrdinal((unsigned char)i);
             PyObject *countObj = PyLong_FromLong(count);
-
             if (!charObj || !countObj) {
                 if (debug) {
-                    printf("Error creating Python objects for character '%c' %d\n", (char)i, i);
+                    printf("Error creating Python objects for character '%c'\n", (char)i);
                 }
                 Py_XDECREF(charObj);
                 Py_XDECREF(countObj);
@@ -634,14 +692,15 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
             skip--;
             PyUnicode_AppendAndDel(&resultString, currentChar);
             continue;
-        } else if (stride > 1) {
-            skip = stride - 1;
         }
 
         if (((double)rand() / RAND_MAX) > probability) {
             PyUnicode_AppendAndDel(&resultString, currentChar);
             continue;
+        } else if (stride > 1) {
+            skip = stride - 1;
         }
+
 
         // Skip if character is whitespace or multi-byte
         if (is_whitespace(*currentCharStr) || is_multi_byte_unicode(currentCharStr)) {
@@ -653,32 +712,32 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
             printf("Debug: Replacing character '%s' at position %zd\n", currentCharStr, i);
         }
 
-        // Construct and validate trigrams
-        PyObject *forwardTrigram = construct_trigram(resultString, i, "forward");
-        PyObject *reverseTrigram = construct_trigram(inputString, i, "reverse");
+        // Construct and validate ngrams
+        PyObject *forwardNgram = construct_ngram(resultString, i, "forward", self->depth);
+        PyObject *reverseNgram = construct_ngram(inputString, i, "reverse", self->depth);
         
         if (debug) {
-            printf("Debug: Forward trigram at position %zd: %s\n", i, PyUnicode_AsUTF8(PyObject_Str(forwardTrigram)));
-            printf("Debug: Reverse trigram at position %zd: %s\n", i, PyUnicode_AsUTF8(PyObject_Str(reverseTrigram)));
+            printf("Debug: Forward ngram at position %zd: %s\n", i, PyUnicode_AsUTF8(PyObject_Str(forwardNgram)));
+            printf("Debug: Reverse ngram at position %zd: %s\n", i, PyUnicode_AsUTF8(PyObject_Str(reverseNgram)));
         }
 
-        PyObject *forwardCounts = calculate_character_counts(self->forwardRoot, forwardTrigram, "forward", debug);
+        PyObject *forwardCounts = calculate_character_counts(self->forwardRoot, forwardNgram, self->depth, "forward", debug);
         if (!forwardCounts) {
             if (debug) {
-                printf("Failed to calculate character counts for forward trigram\n");
+                printf("Failed to calculate character counts for forward ngram\n");
             }
-            Py_DECREF(forwardTrigram);
-            Py_DECREF(reverseTrigram);
+            Py_DECREF(forwardNgram);
+            Py_DECREF(reverseNgram);
             continue;
         }
         
-        PyObject *reverseCounts = calculate_character_counts(self->reverseRoot, reverseTrigram, "reverse", debug);
+        PyObject *reverseCounts = calculate_character_counts(self->reverseRoot, reverseNgram, self->depth, "reverse", debug);
         if (!reverseCounts) {
             if (debug) {
-                printf("Failed to calculate character counts for reverse trigram\n");
+                printf("Failed to calculate character counts for reverse ngram\n");
             }
-            Py_DECREF(forwardTrigram);
-            Py_DECREF(reverseTrigram);
+            Py_DECREF(forwardNgram);
+            Py_DECREF(reverseNgram);
             Py_DECREF(forwardCounts);
             continue;
         }
@@ -762,7 +821,7 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
         PyObject *normalizedForward = normalize_counts_to_probabilities(forwardCounts);
         PyObject *normalizedReverse = normalize_counts_to_probabilities(reverseCounts);
         
-        // Combine the probabilities from forward and reverse trigrams
+        // Combine the probabilities from forward and reverse ngrams
         PyObject *combinedProbabilities = PyDict_Copy(normalizedForward); // Create a copy of the normalized forward probabilities
         
         if (combinedProbabilities == NULL) {
@@ -772,7 +831,7 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
             return NULL;
         }
 
-        // Add probabilities from reverse trigram, combining with existing ones if necessary
+        // Add probabilities from reverse ngram, combining with existing ones if necessary
         pos = 0;
         while (PyDict_Next(normalizedReverse, &pos, &key, &value)) {
             PyObject *existingValue = PyDict_GetItem(combinedProbabilities, key);
@@ -809,8 +868,8 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
 
         // Cleanup
         Py_DECREF(currentChar);
-        Py_DECREF(forwardTrigram);
-        Py_DECREF(reverseTrigram);
+        Py_DECREF(forwardNgram);
+        Py_DECREF(reverseNgram);
         Py_DECREF(forwardCounts);
         Py_DECREF(reverseCounts);
         Py_DECREF(normalizedForward);
@@ -827,17 +886,31 @@ static PyObject* replace_MarkovTrie(PyMarkovTrieObject *self, PyObject *args, Py
 
 
 static PyMethodDef PyMarkovTrie_methods[] = {
-    {"index_string", (PyCFunction)index_string_MarkovTrie, METH_VARARGS, "Index a string in the Markov Trie."},
-    {"dump", (PyCFunction)dump_MarkovTrie, METH_VARARGS, "Dump the Markov Trie into a Python dictionary."},
+    {"index_string", (PyCFunction)index_string_MarkovTrie, METH_VARARGS | METH_KEYWORDS, "Index a string in the Markov Trie."},
+    {"dump", (PyCFunction)dump_MarkovTrie, METH_VARARGS | METH_KEYWORDS, "Dump the Markov Trie into a Python dictionary."},
     {"load", (PyCFunction)load_MarkovTrie, METH_VARARGS, "Load data into the Markov Trie from a dictionary."},
     {"replace", (PyCFunction)replace_MarkovTrie, METH_VARARGS | METH_KEYWORDS, "Replace characters in the string based on Markov probabilities."},
     {NULL} // Sentinel
 };
 
 static PyObject *PyMarkovTrie_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
+    static char *kwlist[] = {"depth", NULL};
+    int depth = 3; // Default depth if not specified
+
     PyMarkovTrieObject *self;
     self = (PyMarkovTrieObject *)type->tp_alloc(type, 0);
     if (self != NULL) {
+        // Parse keyword arguments for depth
+        if (!PyArg_ParseTupleAndKeywords(args, kwds, "|i", kwlist, &depth)) {
+            Py_DECREF(self);
+            return NULL;
+        }
+
+        if (depth < 2) {
+            PyErr_SetString(PyExc_ValueError, "Depth must be at least 2.");
+            Py_DECREF(self);
+            return NULL;
+        }
         // Initialize forwardRoot
         self->forwardRoot = createMarkovNode();
         if (self->forwardRoot == NULL) {
@@ -854,9 +927,21 @@ static PyObject *PyMarkovTrie_new(PyTypeObject *type, PyObject *args, PyObject *
             PyErr_SetString(PyExc_MemoryError, "Failed to create reverse root node");
             return NULL;
         }
+
+        self->depth = depth;
     }
     return (PyObject *)self;
 }
+
+static PyObject *PyMarkovTrie_get_depth(PyMarkovTrieObject *self, void *closure) {
+    return PyLong_FromLong(self->depth);
+}
+
+static PyGetSetDef PyMarkovTrie_getsetters[] = {
+    {"depth", (getter)PyMarkovTrie_get_depth, NULL, "depth of the trie", NULL},
+    {NULL}  // Sentinel
+};
+
 
 PyTypeObject PyMarkovTrieType = {
     PyVarObject_HEAD_INIT(NULL, 0)
@@ -868,5 +953,6 @@ PyTypeObject PyMarkovTrieType = {
     .tp_methods = PyMarkovTrie_methods,
     .tp_dealloc = (destructor) PyMarkovTrie_dealloc,
     .tp_new = PyMarkovTrie_new,
+    .tp_getset = PyMarkovTrie_getsetters,  // Add the getsetters here
 };
 
