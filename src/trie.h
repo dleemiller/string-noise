@@ -5,7 +5,6 @@
 #include <stdbool.h>
 
 #define TRIE_NODE_SIZE 256
-#define MAX_DEPTH 3
 
 // Trie Node structure
 typedef struct TrieNode {
@@ -18,7 +17,6 @@ typedef struct TrieNode {
 TrieNode* createNode(void);
 void insertIntoTrie(TrieNode *root, const char *word, PyObject *mapping);
 void freeTrie(TrieNode *root);
-PyObject* build_tree(PyObject *self, PyObject *args);
 TrieNode* lookupInTrie(TrieNode *root, const char *word);
 
 // Declaration of the PyTrieObject type

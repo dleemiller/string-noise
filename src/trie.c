@@ -19,8 +19,7 @@ TrieNode* createNode(void) {
 }
 
 int charToIndex(char c) {
-    unsigned char uc = (unsigned char)c;
-    return (int)uc;
+    return (int)c;
 }
 
 void insertIntoTrie(TrieNode *root, const char *word, PyObject *mapping) {
@@ -56,7 +55,7 @@ void freeTrie(TrieNode *root) {
 }
 
 
-PyObject* build_tree(PyObject *self, PyObject *args) {
+PyObject* PyTrie_load(PyTrieObject *self, PyObject *args) {
     PyObject *py_dict;
     if (!PyArg_ParseTuple(args, "O", &py_dict)) {
         return NULL; // Argument parsing failed
@@ -66,28 +65,26 @@ PyObject* build_tree(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    // Create a new PyTrieObject instance
-    PyTrieObject *pyTrie = PyObject_New(PyTrieObject, &PyTrieType);
-    if (!pyTrie) {
-        PyErr_SetString(PyExc_MemoryError, "Failed to create Trie object");
-        return NULL;
+    // Clear the existing Trie if it has data
+    if (self->root != NULL) {
+        freeTrie(self->root);
+        self->root = NULL;
     }
 
-    // Initialize the trie root for the new object
-    pyTrie->root = createNode();
-    if (pyTrie->root == NULL) {
+    // Initialize the trie root for the Trie object
+    self->root = createNode();
+    if (self->root == NULL) {
         PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for the Trie root");
-        Py_DECREF(pyTrie);
         return NULL;
     }
 
-    // Populate the trie
     PyObject *key, *value;
     Py_ssize_t pos = 0;
     while (PyDict_Next(py_dict, &pos, &key, &value)) {
         if (!PyUnicode_Check(key)) {
             PyErr_SetString(PyExc_TypeError, "All keys in the dictionary must be strings");
-            Py_DECREF(pyTrie);
+            freeTrie(self->root);
+            self->root = NULL;
             return NULL;
         }
 
@@ -101,7 +98,8 @@ PyObject* build_tree(PyObject *self, PyObject *args) {
                 PyObject *item = PyList_GetItem(value, i);
                 if (!PyUnicode_Check(item)) {
                     PyErr_SetString(PyExc_TypeError, "All elements in the list must be strings");
-                    Py_DECREF(pyTrie);
+                    freeTrie(self->root);
+                    self->root = NULL;
                     return NULL;
                 }
             }
@@ -114,7 +112,8 @@ PyObject* build_tree(PyObject *self, PyObject *args) {
             while (PyDict_Next(value, &sub_pos, &sub_key, &sub_value)) {
                 if (!PyUnicode_Check(sub_key) || !PyFloat_Check(sub_value)) {
                     PyErr_SetString(PyExc_TypeError, "In a dict value, all keys must be strings and all values must be floats");
-                    Py_DECREF(pyTrie);
+                    freeTrie(self->root);
+                    self->root = NULL;
                     return NULL;
                 }
             }
@@ -123,16 +122,26 @@ PyObject* build_tree(PyObject *self, PyObject *args) {
         // If none of the above, raise an error
         else {
             PyErr_SetString(PyExc_TypeError, "Values must be a string, a list of strings, or a dict with string keys and float values");
-            Py_DECREF(pyTrie);
+            freeTrie(self->root);
+            self->root = NULL;
             return NULL;
         }
 
         const char *word = PyUnicode_AsUTF8(key);
-        insertIntoTrie(pyTrie->root, word, value);
+        if (word == NULL) {
+            PyErr_SetString(PyExc_RuntimeError, "Error converting key to string");
+            Py_DECREF(value);
+            freeTrie(self->root);
+            self->root = NULL;
+            return NULL;
+        }
+
+        insertIntoTrie(self->root, word, value);
     }
 
-    return (PyObject *)pyTrie;
+    Py_RETURN_NONE;
 }
+
 
 TrieNode* lookupInTrie(TrieNode *root, const char *word) {
     TrieNode *current = root;
@@ -176,6 +185,7 @@ PyObject* PyTrie_lookup(PyTrieObject *self, PyObject *args) {
 
 // Define methods of PyTrie type
 static PyMethodDef PyTrie_methods[] = {
+    {"load", (PyCFunction)PyTrie_load, METH_VARARGS, "Load a dictionary into the trie."},
     {"lookup", (PyCFunction)PyTrie_lookup, METH_VARARGS, "Look up a word in the trie."},
     {NULL}  /* Sentinel */
 };

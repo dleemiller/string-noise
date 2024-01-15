@@ -3,7 +3,7 @@ import json
 import random
 import re
 import importlib.resources
-from ..string_noise import augment_string, normalize, build_tree
+from ..string_noise import augment_string, normalize, Trie
 from ..string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING
 
 
@@ -73,7 +73,8 @@ class Mapper:
 class TrieMapper(Mapper):
     def __init__(self, json_data):
         super().__init__(json_data)
-        self.__tree = build_tree(json_data)
+        self.__tree = Trie()
+        self.__tree.load(json_data)
 
     @property
     def tree(self):
