@@ -1,5 +1,21 @@
 # string-noise
-Add noise to Python strings using various augmentation styles with the `string-noise` package. This package offers an N:M character-sequence mapping with probabilistic and weighted replacements, utilizing C extensions for fast processing. Implements Trie data structure in C for fast performance in large maps, like mispelling/moe. Additionally, provides algorithms for masking and random noise. It's ideal for generating synthetic error production, particularly useful for string augmentation in the loop while training machine learning models.
+
+The `string-noise` Python package provides a suite of tools for augmenting strings through various noise addition techniques. It's designed to assist in creating synthetic datasets, particularly beneficial for training and evaluating machine learning models. The package offers a range of augmentation styles, including:
+
+- Common Misspellings
+- Markov Chain-Based Alterations
+- OCR (Optical Character Recognition) Simulations
+- Character Masking
+- Homoglyph Replacements
+- And more!
+
+Key Features:
+- Implements an N:M character-sequence mapping for diverse augmentation possibilities.
+- Probabilistic and weighted replacements provide realistic and varied text distortions.
+- Optimized for performance with C extensions, ensuring fast processing even for large datasets.
+- Utilizes a Trie data structure in C, enabling efficient handling of extensive maps (such as those required for common misspellings and Markov chains).
+- Designed for ease of use, the package has a straightforward API and requires no external dependencies.
+
 
 ## Table of Contents
 1. [Getting Started](#getting-started)
