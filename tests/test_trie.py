@@ -6,12 +6,12 @@ from string_noise.string_noise import MarkovTrie
 
 class TestTrie(unittest.TestCase):
     def setUp(self):
-        self.trie = string_noise.build_tree({})
+        self.trie = string_noise.Trie()
 
     def test_insert_and_lookup(self):
         # Test insertion and lookup
         test_dict = {"hello": ["hola", "bonjour"], "world": ["mundo", "monde"]}
-        self.trie = string_noise.build_tree(test_dict)
+        self.trie.load(test_dict)
 
         # Check if words are correctly inserted
         for word in test_dict:
@@ -27,18 +27,18 @@ class TestTrie(unittest.TestCase):
     def test_invalid_input(self):
         # Test handling of invalid input
         with self.assertRaises(TypeError):
-            string_noise.build_tree("not a dict")
+            self.trie.load("not a dict")
 
         # Test handling of non-string keys
         with self.assertRaises(TypeError):
-            string_noise.build_tree({1: ["one"]})
+            self.trie.load({1: ["one"]})
 
     def test_memory_management(self):
         # Test memory management
         large_dict = {f"word{i}": [f"meaning{i}"] for i in range(1000)}
-        large_trie = string_noise.build_tree(large_dict)
+        self.trie.load(large_dict)
         for i in range(1000):
-            self.assertIsNotNone(large_trie.lookup(f"word{i}"))
+            self.assertIsNotNone(self.trie.lookup(f"word{i}"))
 
     def test_valid_inputs(self):
         # Test valid inputs
@@ -47,26 +47,26 @@ class TestTrie(unittest.TestCase):
             "word2": ["list", "of", "strings"],
             "word3": {"key1": 0.5, "key2": 0.3},
         }
-        trie = string_noise.build_tree(valid_dict)
+        self.trie.load(valid_dict)
         for word in valid_dict:
-            self.assertIsNotNone(trie.lookup(word))
+            self.assertIsNotNone(self.trie.lookup(word))
 
     def test_invalid_input_types(self):
         # Test invalid dictionary input
         with self.assertRaises(TypeError):
-            string_noise.build_tree("not a dict")
+            self.trie.load("not a dict")
 
         # Test non-string keys
         with self.assertRaises(TypeError):
-            string_noise.build_tree({1: ["one"]})
+            self.trie.load({1: ["one"]})
 
         # Test invalid value types
         with self.assertRaises(TypeError):
-            string_noise.build_tree({"word": 123})  # Integer value
+            self.trie.load({"word": 123})  # Integer value
         with self.assertRaises(TypeError):
-            string_noise.build_tree({"word": [1, 2, 3]})  # List of integers
+            self.trie.load({"word": [1, 2, 3]})  # List of integers
         with self.assertRaises(TypeError):
-            string_noise.build_tree(
+            self.trie.load(
                 {"word": {"key": "not a float"}}
             )  # Dict with non-float value
 
@@ -79,12 +79,12 @@ class TestTrie(unittest.TestCase):
             "invalid2": [1, 2, 3],
         }
         with self.assertRaises(TypeError):
-            string_noise.build_tree(mixed_dict)
+            self.trie.load(mixed_dict)
 
     def test_empty_trie(self):
         # Test empty trie
-        trie = string_noise.build_tree({})
-        self.assertIsNone(trie.lookup("anything"))
+        self.trie.load({})
+        self.assertIsNone(self.trie.lookup("anything"))
 
     def test_index_string_basic(self):
         trie = MarkovTrie()
