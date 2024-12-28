@@ -9,7 +9,7 @@ string_noise_module = Extension(
         "src/augment.c",
         "src/random.c",
         "src/mask.c",
-        #"src/tokenizer.c",
+        # "src/tokenizer.c",
         "src/utils.c",
         "src/trie.c",
         "src/markov.c",
@@ -37,4 +37,9 @@ setup(
     ],
     packages=find_packages(),
     ext_modules=[string_noise_module],
+    include_package_data=True,
+    package_data={
+        "string_noise.mappings.default": ["*.json", "*.json.gz"],
+    },
+    zip_safe=False,
 )
