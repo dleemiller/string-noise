@@ -1,6 +1,6 @@
 from setuptools import setup, Extension, find_packages
+from Cython.Build import cythonize
 
-# Define the extension module
 string_noise_module = Extension(
     "string_noise.string_noise",
     sources=[
@@ -8,7 +8,7 @@ string_noise_module = Extension(
         "src/normalize.c",
         "src/augment.c",
         "src/random.c",
-        "src/mask.c",
+        #"src/mask.c",
         # "src/tokenizer.c",
         "src/utils.c",
         "src/trie.c",
@@ -17,7 +17,17 @@ string_noise_module = Extension(
     extra_compile_args=["-g"],
 )
 
-# Define setup parameters
+cython_mask_module = Extension(
+    "string_noise.noisers.mask",
+    sources=["string_noise/noisers/mask.pyx"],
+    extra_compile_args=["-g"],
+)
+
+extensions = [
+    string_noise_module,
+    cython_mask_module
+]
+
 setup(
     name="string-noise",
     version="0.1",
@@ -36,10 +46,14 @@ setup(
         "Programming Language :: C",
     ],
     packages=find_packages(),
-    ext_modules=[string_noise_module],
+    ext_modules=cythonize(
+        extensions,
+        compiler_directives={"language_level": 3},
+    ),
     include_package_data=True,
     package_data={
         "string_noise.mappings.default": ["*.json", "*.json.gz"],
     },
     zip_safe=False,
 )
+

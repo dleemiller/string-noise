@@ -7,8 +7,9 @@ from .string_noise import (
     ASCENDING,
     DESCENDING,
     random_replacement,
-    random_masking,
+    #random_masking,
 )
+from .noisers import random_masking
 from .string_noise import (
     DEFAULT_VOWEL_MASK,
     DEFAULT_CONSONANT_MASK,
@@ -223,8 +224,8 @@ class LazyNoise:
             four_byte_mask=four_byte_mask,
             general_mask_probability=general_mask_probability,
             seed=seed,
-            skip_digits=skip_digits,
-            debug=debug,
+            skip_digits=int(skip_digits),
+            debug=int(debug),
         )
 
 
