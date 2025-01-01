@@ -29,11 +29,6 @@ import math
 from cython.view cimport array as cvarray
 from cython cimport sizeof
 
-# You can cimport various low-level C APIs as needed, e.g.:
-# from libc.stdlib cimport srand, rand
-# from libc.time cimport clock
-
-# For maximum similarity, define same constants as your "constants.h"
 cdef int ASCENDING = 0
 cdef int DESCENDING = 1
 cdef int SHUFFLE = 2
@@ -165,24 +160,6 @@ cdef object select_replacement(object value, bint debug):
     return replacement
 
 
-cdef object normalize_string(object input_string):
-    """
-    In Python/Cython, we typically don't need a separate "normalize" pass
-    from UTF-8 -> PyUnicode -> UTF-8 -> PyUnicode.
-    But if you really want to replicate that logic, you can re-encode and decode.
-    """
-    if not isinstance(input_string, str):
-        return None
-
-    # "Normalization" approach:
-    try:
-        utf8_bytes = input_string.encode('utf-8', 'strict')
-        normalized_str = utf8_bytes.decode('utf-8', 'strict')
-        return normalized_str
-    except UnicodeError:
-        return None
-
-
 #########################################################
 # The Core Replacement Logic
 #########################################################
@@ -195,7 +172,7 @@ cdef str perform_replacements(
     int sort_order
 ):
     """
-    Translate the C function 'perform_replacements' into Cython/Python logic.
+    Make the character replacements
     """
 
     cdef Py_ssize_t input_len = len(input_string)
@@ -215,7 +192,6 @@ cdef str perform_replacements(
         if debug:
             print("SORT SHUFFLE...")
         shuffle_list(keys)
-    # We handle RESHUFFLE later inside the loop, if needed
 
     cdef list output_chars = []
     cdef Py_ssize_t i = 0
@@ -228,12 +204,10 @@ cdef str perform_replacements(
     while i < input_len:
         # Probability check
         if random.random() > probability:
-            # Just copy this char
             output_chars.append(input_string[i])
             i += 1
             continue
 
-        # Possibly re-shuffle if sort_order == RESHUFFLE
         if sort_order == 3:  # RESHUFFLE
             if debug:
                 print("SORT RESHUFFLE...")
@@ -241,7 +215,7 @@ cdef str perform_replacements(
 
         # Attempt each key in order
         for key in keys:
-            key_len = len(key)  # length of this key
+            key_len = len(key)
             if i + key_len > input_len:
                 continue
 
@@ -251,8 +225,6 @@ cdef str perform_replacements(
                 value = replacement_mapping[key]
                 replacement = select_replacement(value, debug)
                 if replacement is None:
-                    # Something went wrong or user gave empty dict/list
-                    # fallback => just copy the char
                     output_chars.append(input_string[i])
                     i += 1
                     replaced = True
@@ -277,13 +249,7 @@ cdef str perform_replacements(
             output_chars.append(input_string[i])
             i += 1
 
-    cdef str joined_output = "".join(output_chars)
-
-    # "Normalize" if you want to replicate the original logic:
-    cdef object normalized = normalize_string(joined_output)
-    if normalized is None:
-        return joined_output  # fallback if error
-    return <str>normalized
+    return "".join(output_chars)
 
 
 #########################################################
