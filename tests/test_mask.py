@@ -1,5 +1,5 @@
 import unittest
-from string_noise.string_noise import random_masking
+from string_noise.noisers import random_masking
 
 
 class TestRandomMasking(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestRandomMasking(unittest.TestCase):
         """Test with a known seed for predictable output."""
         original = "abcdefg"
         result = random_masking(original, seed=42, probability=0.5)
-        expected = "\x10\x14cd\x14\x11\x14"
+        expected = "a\x14\x14\x12\x14f\x12"
         self.assertEqual(result, expected)
 
     def test_varying_lengths(self):
@@ -53,7 +53,7 @@ class TestRandomMasking(unittest.TestCase):
             seed=13,
             general_mask_probability=0.2,
         )
-        self.assertEqual(result, "\x02\x04\x04\x01\x04")
+        self.assertEqual(result, "\x02\x01\x01\x04\x04")
 
     def test_general_mask_probability(self):
         """Test general mask probability."""
@@ -90,6 +90,21 @@ class TestRandomMasking(unittest.TestCase):
         original = "你好世界"  # "Hello World" in Chinese
         result = random_masking(original, probability=0.5, seed=123)
         self.assertEqual(len(result), len(original))
+        self.assertEqual(len(result.encode("utf-8")), len(original.encode("utf-8")))
+
+    def test_unicode_characters_fixed_length(self):
+        """Test strings with Unicode characters."""
+        original = "χυμεία,"
+        result = random_masking(original, general_mask_probability=0.0, probability=0.5, seed=123, debug=0)
+        self.assertEqual(len(result), len(original))
+        self.assertEqual(len(result.encode("utf-8")), len(original.encode("utf-8")))
+
+    def test_unicode_characters_fixed_length2(self):
+        """Test strings with Unicode characters."""
+        original = "Núria"
+        result = random_masking(original, general_mask_probability=0.0, probability=1.0, seed=123, debug=0)
+        self.assertEqual(len(result), len(original))
+        self.assertEqual(len(result.encode("utf-8")), len(original.encode("utf-8")))
 
     def test_very_long_string(self):
         """Test a very long string."""
