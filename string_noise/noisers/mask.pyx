@@ -53,7 +53,7 @@ cdef inline int get_codepoint_utf8_length(int ch):
 # ---------------------------------------------------------------------
 # Main masking function
 def random_masking(
-    input_string: str,
+    text: str,
     probability: float = 0.1,
     min_consecutive: int = 1,
     max_consecutive: int = 2,
@@ -71,10 +71,10 @@ def random_masking(
     debug: int = 0
 ) -> str:
     """
-    Apply random masking to `input_string` with the given parameters.
+    Apply random masking to `text` with the given parameters.
     Returns a new Python string with masked characters.
     """
-    cdef int n = len(input_string)
+    cdef int n = len(text)
     if n == 0:
         return ""
 
@@ -104,7 +104,7 @@ def random_masking(
     # Populate codepoints
     cdef int i
     for i in range(n):
-        codepoints[i] = ord(input_string[i])
+        codepoints[i] = ord(text[i])
 
     # (2) Random masking logic
     cdef int ch, remaining, chars_to_mask, j, ch_bytes, orig_ch, mask_char
@@ -175,4 +175,81 @@ def random_masking(
         print(f"Debug: len(output_string) = {len(output_string)}")
 
     return output_string
+
+
+def random_mask_batch(
+    list text,
+    double probability = 0.1,
+    int min_consecutive = 1,
+    int max_consecutive = 2,
+    int vowel_mask = 0x11,            # or your DEFAULT_VOWEL_MASK
+    int consonant_mask = 0x12,        # or your DEFAULT_CONSONANT_MASK
+    int digit_mask = 0x13,            # ...
+    int nws_mask = 0x10,
+    int general_mask = 0x14,
+    int two_byte_mask = 0x15,
+    int three_byte_mask = 0x16,
+    int four_byte_mask = 0x17,
+    double general_mask_probability = 0.5,
+    long seed = -1,
+    int skip_digits = 0,
+    int debug = 0
+) -> list:
+    """
+    Applies the same 'random_masking' logic to a list of input strings.
+    Returns a list of masked strings.
+
+    Parameters:
+      - text: list[str]
+      - probability, min_consecutive, max_consecutive, ...
+        (same as random_masking)
+      - seed: if != -1, used to seed the RNG once; else random.seed() with system time
+      - debug: if nonzero, print debug info
+
+    Example:
+      masked_list = random_mask_batch(["Hello", "World"], probability=0.2, debug=1)
+    """
+    cdef Py_ssize_t n = len(text)
+    cdef list results = [None] * n
+
+    cdef Py_ssize_t i
+    cdef str s, masked
+
+    if seed == -1:
+        random.seed()
+    else:
+        random.seed(seed)
+
+    if probability < 0.0 or probability > 1.0:
+        raise ValueError("probability must be between 0 and 1.")
+    if min_consecutive < 0 or max_consecutive < min_consecutive:
+        raise ValueError("Invalid min/max consecutive values.")
+
+    for s in text:
+        if not isinstance(s, str):
+            raise TypeError("All elements in text must be str")
+
+    for i in range(n):
+        s = text[i]
+        masked = random_masking(
+            s,
+            probability=probability,
+            min_consecutive=min_consecutive,
+            max_consecutive=max_consecutive,
+            vowel_mask=vowel_mask,
+            consonant_mask=consonant_mask,
+            digit_mask=digit_mask,
+            nws_mask=nws_mask,
+            general_mask=general_mask,
+            two_byte_mask=two_byte_mask,
+            three_byte_mask=three_byte_mask,
+            four_byte_mask=four_byte_mask,
+            general_mask_probability=general_mask_probability,
+            seed=-1,
+            skip_digits=skip_digits,
+            debug=debug
+        )
+        results[i] = masked
+
+    return results
 

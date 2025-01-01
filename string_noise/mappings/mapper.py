@@ -3,7 +3,8 @@ import json
 import random
 import re
 import importlib.resources
-from ..string_noise import augment_string, normalize, Trie
+from ..string_noise import normalize, Trie
+from ..noisers import augment_string, augment_batch
 from ..string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING
 
 
@@ -54,20 +55,32 @@ class Mapper:
 
     def __call__(
         self,
-        text: str,
+        text: str | list[str],
         probability: float = 1.0,
         sort_order=ASCENDING,
         debug=False,
         seed=None,
     ):
-        return augment_string(
-            text,
-            self.map,
-            probability=probability,
-            debug=debug,
-            sort_order=sort_order,
-            seed=-1 if seed is None else seed,
-        )
+        if isinstance(text, str):
+            return augment_string(
+                text,
+                self.map,
+                probability=probability,
+                debug=debug,
+                sort_order=sort_order,
+                seed=-1 if seed is None else seed,
+            )
+        elif isinstance(text, list):
+            return augment_batch(
+                text,
+                self.map,
+                probability=probability,
+                debug=debug,
+                sort_order=sort_order,
+                seed=-1 if seed is None else seed,
+            )
+        else:
+            raise TypeError("Input text must be `str` or list[str].")
 
 
 class TrieMapper(Mapper):

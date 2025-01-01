@@ -7,9 +7,9 @@ from .string_noise import (
     ASCENDING,
     DESCENDING,
     random_replacement,
-    #random_masking,
+    # random_masking,
 )
-from .noisers import random_masking
+from .noisers import random_masking, random_mask_batch
 from .string_noise import (
     DEFAULT_VOWEL_MASK,
     DEFAULT_CONSONANT_MASK,
@@ -165,7 +165,7 @@ class LazyNoise:
 
     @staticmethod
     def mask(
-        original_string: str,
+        text: str | list[str],
         probability: float = 0.1,
         min_consecutive: int = 1,
         max_consecutive: int = 1,
@@ -185,7 +185,7 @@ class LazyNoise:
         Applies random masking to a string based on character properties and Unicode byte size.
 
         Parameters:
-        - original_string (str): The string to which the masking is to be applied.
+        - text (str | list[str]): The string(s) to which the masking is to be applied.
         - probability (float, optional): Probability of each character being masked (0-1). Defaults to 0.1.
         - min_consecutive (int, optional): Minimum number of consecutive characters to consider for masking. Defaults to 1.
         - max_consecutive (int, optional): Maximum number of consecutive characters to consider for masking. Defaults to 2.
@@ -211,8 +211,15 @@ class LazyNoise:
         >>> noise.mask("Python", vowel_mask=0x01, consonant_mask=0x02, probability=1, seed=123)
         '\x02\x01th\x02n'
         """
-        return random_masking(
-            input_string=original_string,
+        if isinstance(text, str):
+            mask_fn = random_masking
+        elif isinstance(text, list):
+            mask_fn = random_mask_batch
+        else:
+            raise TypeError("Input text must be `str` or `list[str]`")
+
+        return mask_fn(
+            text=text,
             probability=probability,
             min_consecutive=min_consecutive,
             max_consecutive=max_consecutive,

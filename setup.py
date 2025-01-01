@@ -8,7 +8,7 @@ string_noise_module = Extension(
         "src/normalize.c",
         "src/augment.c",
         "src/random.c",
-        #"src/mask.c",
+        "src/mask.c",
         # "src/tokenizer.c",
         "src/utils.c",
         "src/trie.c",
@@ -23,9 +23,17 @@ cython_mask_module = Extension(
     extra_compile_args=["-g"],
 )
 
+cython_augment_module = Extension(
+    "string_noise.noisers.augment",
+    sources=["string_noise/noisers/augment.pyx"],
+    extra_compile_args=["-g"],
+)
+
+
 extensions = [
     string_noise_module,
-    cython_mask_module
+    cython_mask_module,
+    cython_augment_module,
 ]
 
 setup(
