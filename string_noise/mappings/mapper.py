@@ -3,7 +3,7 @@ import json
 import random
 import re
 import importlib.resources
-from ..string_noise import normalize, Trie
+from ..string_noise import normalize
 from ..noisers import augment_string, augment_batch
 from ..string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING
 
@@ -83,17 +83,23 @@ class Mapper:
             raise TypeError("Input text must be `str` or list[str].")
 
 
-class TrieMapper(Mapper):
+class DictMapper(Mapper):
     def __init__(self, json_data):
+        """
+        Initialize the mapper with a dictionary where keys are correct words
+        and values are lists of possible replacements (misspellings).
+        """
         super().__init__(json_data)
-        self.__tree = Trie()
-        self.__tree.load(json_data)
+        self._mapping = json_data
 
     @property
-    def tree(self):
-        return self.__tree
+    def mapping(self):
+        return self._mapping
 
     def random_replace(self, text, probability=0.5, seed=None):
+        """
+        Randomly replaces words in the input text based on the provided mapping.
+        """
         if seed is not None:
             random.seed(seed)
 
@@ -101,7 +107,7 @@ class TrieMapper(Mapper):
             word = match.group(0)
             if random.random() < probability:
                 lower_word = word.lower()
-                choices = self.tree.lookup(lower_word) or []
+                choices = self.mapping.get(lower_word, [])
                 if choices:
                     choice = random.choice(choices)
                     return self.match_case(word, choice)
@@ -111,6 +117,9 @@ class TrieMapper(Mapper):
 
     @staticmethod
     def match_case(original, new_word):
+        """
+        Matches the case of the new word to the case of the original word.
+        """
         if original.isupper():
             return new_word.upper()
         elif original.istitle():
@@ -118,4 +127,45 @@ class TrieMapper(Mapper):
         return new_word.lower()
 
     def __call__(self, text: str, probability: float = 1.0, debug=False, seed=None):
+        """
+        Allows the object to be called like a function for convenience.
+        """
         return self.random_replace(text, probability, seed)
+
+
+# class TrieMapper(Mapper):
+#    def __init__(self, json_data):
+#        super().__init__(json_data)
+#        self.__tree = Trie()
+#        self.__tree.load(json_data)
+#
+#    @property
+#    def tree(self):
+#        return self.__tree
+#
+#    def random_replace(self, text, probability=0.5, seed=None):
+#        if seed is not None:
+#            random.seed(seed)
+#
+#        def replace_word(match):
+#            word = match.group(0)
+#            if random.random() < probability:
+#                lower_word = word.lower()
+#                choices = self.tree.lookup(lower_word) or []
+#                if choices:
+#                    choice = random.choice(choices)
+#                    return self.match_case(word, choice)
+#            return word
+#
+#        return re.sub(r"\b\w+\b", replace_word, text)
+#
+#    @staticmethod
+#    def match_case(original, new_word):
+#        if original.isupper():
+#            return new_word.upper()
+#        elif original.istitle():
+#            return new_word.title()
+#        return new_word.lower()
+#
+#    def __call__(self, text: str, probability: float = 1.0, debug=False, seed=None):
+#        return self.random_replace(text, probability, seed)

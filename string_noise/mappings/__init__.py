@@ -1,6 +1,6 @@
 import functools
 
-from .mapper import Mapper, TrieMapper
+from .mapper import Mapper, DictMapper
 
 RESOURCE_PACKAGE = "string_noise.mappings.default"
 
@@ -15,15 +15,14 @@ class CustomMapper:
             Mapper.load, resource_package=resource_package, resource_path=path
         )
 
-
-class CustomTrieMapper:
+class CustomDictMapper:
     @classmethod
     def new(cls, path, resource_package=RESOURCE_PACKAGE):
         """
         Set resource_package to `None` for custom local mappings.
         """
         return functools.partial(
-            TrieMapper.load, resource_package=resource_package, resource_path=path
+            DictMapper.load, resource_package=resource_package, resource_path=path
         )
 
 
@@ -34,8 +33,8 @@ load_keyboard = CustomMapper.new("keyboard.json")
 load_llm_ocr = CustomMapper.new("llm_ocr.json")
 load_nguyen_ocr = CustomMapper.new("nguyen_ocr.json")
 
-load_mispelling = CustomTrieMapper.new("spell_errors.json")
-load_moe_mispelling = CustomTrieMapper.new("moe_reduced.json.gz")
+load_mispelling = CustomDictMapper.new("spell_errors.json")
+load_moe_mispelling = CustomDictMapper.new("moe_reduced.json.gz")
 
 
 __all__ = [
