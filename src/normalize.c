@@ -127,3 +127,29 @@ PyObject* normalize(PyObject* self, PyObject* args, PyObject* kwargs) {
     return normalized_dict;
 }
 
+// Method definitions
+static PyMethodDef NormalizeMethods[] = {
+    {"normalize", (PyCFunction)normalize, METH_VARARGS | METH_KEYWORDS, "Normalize the values in a dictionary or list"},
+    {NULL, NULL, 0, NULL} // Sentinel
+};
+
+// Module definition
+static struct PyModuleDef normalizemodule = {
+    PyModuleDef_HEAD_INIT,
+    "normalize",
+    "Module for augmenting strings with noise.",
+    -1,
+    NormalizeMethods
+};
+
+// Module initialization
+PyMODINIT_FUNC PyInit_normalize(void) {
+    PyObject *module = PyModule_Create(&normalizemodule);
+    if (module == NULL) {
+        return NULL;
+    }
+
+    return module;
+}
+
+

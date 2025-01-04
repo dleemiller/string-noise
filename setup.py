@@ -1,18 +1,10 @@
 from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 
-string_noise_module = Extension(
-    "string_noise.string_noise",
+normalize_module = Extension(
+    "string_noise.normalize",
     sources=[
-        "src/string_noise.c",
         "src/normalize.c",
-        "src/augment.c",
-        "src/random.c",
-        "src/mask.c",
-        # "src/tokenizer.c",
-        "src/utils.c",
-        "src/trie.c",
-        "src/markov.c",
     ],
     extra_compile_args=["-g"],
 )
@@ -29,11 +21,24 @@ cython_augment_module = Extension(
     extra_compile_args=["-g"],
 )
 
+cython_random_module = Extension(
+    "string_noise.noisers.random",
+    sources=["string_noise/noisers/random.pyx"],
+    extra_compile_args=["-g"],
+)
+
+cython_markov_module = Extension(
+    "string_noise.noisers.markov",
+    sources=["string_noise/noisers/markov.pyx"],
+    extra_compile_args=["-g"],
+)
 
 extensions = [
-    string_noise_module,
+    normalize_module,
     cython_mask_module,
     cython_augment_module,
+    cython_random_module,
+    cython_markov_module,
 ]
 
 setup(
@@ -64,4 +69,3 @@ setup(
     },
     zip_safe=False,
 )
-
