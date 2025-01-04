@@ -1,7 +1,7 @@
 from .mask import random_masking, random_mask_batch, DefaultMask
 from .augment import augment_string, augment_batch, SortOrder
 from .random import random_replacement
-from .normalize import normalize
+from .markov import MarkovModel
 
 SHUFFLE = SortOrder.SHUFFLE
 RESHUFFLE = SortOrder.RESHUFFLE

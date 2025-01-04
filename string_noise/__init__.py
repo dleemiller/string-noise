@@ -6,10 +6,6 @@ from .noisers import (
     random_masking,
     random_mask_batch,
     random_replacement,
-    SHUFFLE,
-    RESHUFFLE,
-    ASCENDING,
-    DESCENDING,
 )
 from .noisers import (
     DEFAULT_VOWEL_MASK,
@@ -19,6 +15,10 @@ from .noisers import (
     DEFAULT_GENERAL_MASK,
     DEFAULT_2BYTE_MASK,
     DEFAULT_4BYTE_MASK,
+    SHUFFLE,
+    RESHUFFLE,
+    ASCENDING,
+    DESCENDING,
 )
 
 

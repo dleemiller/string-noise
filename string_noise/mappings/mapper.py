@@ -4,7 +4,15 @@ import random
 import re
 import importlib.resources
 
-from ..noisers import normalize, augment_string, augment_batch, ASCENDING
+from ..normalize import normalize
+from ..noisers import (
+    augment_string,
+    augment_batch,
+    SHUFFLE,
+    RESHUFFLE,
+    ASCENDING,
+    DESCENDING
+)
 
 
 class Mapper:
