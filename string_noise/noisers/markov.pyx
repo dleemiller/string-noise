@@ -78,7 +78,10 @@ cdef class MarkovModel:
         Returns:
             str: The text with added Markov noise.
         """
-        rng = Random(seed)
+        if seed == -1:
+            rng = Random()
+        else:
+            rng = Random(seed)
         cdef list output = []
         cdef str ngram, next_char
         cdef dict transitions

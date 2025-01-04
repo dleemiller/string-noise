@@ -2,23 +2,23 @@
 # cython: language_level=3
 # cython: boundscheck=False, wraparound=False
 
-#"""
-#A Cython implementation of 'augment_string' that applies a user-defined mapping
-#to randomly replace substrings in an input string.
-#
-#Example usage:
-#
-#    from string_noise.noisers.augment_string import augment_string
-#
-#    output_str = augment_string(
-#        input_string="Hello world",
-#        replacement_mapping={"world": "planet"},
-#        probability=0.5,
-#        debug=True,
-#        sort_order=3,  # or 0,1,2
-#        seed=12345
-#    )
-#"""
+"""
+Cython implementation of 'augment_string' that applies a mapping
+to randomly replace substrings in an input string.
+
+Example usage:
+
+    from string_noise.noisers.augment_string import augment_string
+
+    output_str = augment_string(
+        input_string="Hello world",
+        replacement_mapping={"world": "planet"},
+        probability=0.5,
+        debug=True,
+        sort_order=3,  # or 0,1,2
+        seed=12345
+    )
+"""
 import random
 import math
 from cython.view cimport array as cvarray
@@ -62,17 +62,6 @@ cdef inline int compare_pyobject_descending(object a, object b):
         return 0
 
 
-cdef void shuffle_list(list arr):
-    """
-    Fisher-Yates shuffle (in-place) for a Python list.
-    Equivalent to the C shuffle_pyobject_array in your code.
-    """
-    cdef Py_ssize_t i, j, n = len(arr)
-    for i in range(n - 1, 0, -1):
-        j = random.randint(0, i)  # inclusive
-        arr[i], arr[j] = arr[j], arr[i]
-
-
 cdef int weighted_choice(double[:] weights):
     """
     Given a 1D memoryview of weights (which sum to ~1.0),
@@ -80,7 +69,7 @@ cdef int weighted_choice(double[:] weights):
     If the sum of weights < 1.0, we'll just compare cumulatively.
     """
     cdef double total_weight = 0.0
-    cdef double r = random.random()  # in [0,1)
+    cdef double r = random.random()
     cdef Py_ssize_t i, count = weights.shape[0]
 
     # Accumulate and compare
@@ -89,7 +78,7 @@ cdef int weighted_choice(double[:] weights):
         if r <= total_weight:
             return i
 
-    return -1  # fallback if floating mismatch
+    return -1
 
 
 cdef object select_replacement(object value, bint debug):
@@ -98,18 +87,16 @@ cdef object select_replacement(object value, bint debug):
     If value is a list[str], pick uniformly.
     Else, value is a str => return it directly.
     """
-    # -- All cdef declarations must be here, before logic begins --
     cdef object replacement = None
     cdef Py_ssize_t replacement_count = 0
     cdef list keys = []
     cdef list vals = []
-    cdef cvarray[double] wts_arr  # We'll create it in a block below
-    cdef double[::1] wts          # Memoryview
+    cdef cvarray[double] wts_arr
+    cdef double[::1] wts
     cdef int idx = -1
     cdef Py_ssize_t i
     cdef double sum_w = 0.0
 
-    # -------------------- Logic starts here --------------------
     if isinstance(value, dict):
         # Weighted dictionary
         replacement_count = len(value)
@@ -169,80 +156,78 @@ cdef str perform_replacements(
     int sort_order
 ):
     """
-    Make the character replacements
-    """
+    Perform character replacements in the input string based on the given mapping.
+    
+    Parameters:
+        input_string (str): The input string to process.
+        replacement_mapping (dict): A dictionary mapping keys to replacement values.
+        probability (double): The probability of making a replacement.
+        debug (bool): Whether to print debug information.
+        sort_order (int): Order for processing keys (ascending, descending, shuffle).
 
+    Returns:
+        str: The modified string after replacements.
+    """
     cdef Py_ssize_t input_len = len(input_string)
     cdef list keys = list(replacement_mapping.keys())
-    cdef Py_ssize_t key_count = len(keys)
-
-    # Sort or shuffle keys array
-    if sort_order == SortOrder.ASCENDING:
-        if debug:
-            print("SORT ASCENDING...")
-        keys.sort(key=lambda x: x)  # ascending
-    elif sort_order == SortOrder.DESCENDING:
-        if debug:
-            print("SORT DESCENDING...")
-        keys.sort(key=lambda x: x, reverse=True)
-    elif sort_order == SortOrder.SHUFFLE:
-        if debug:
-            print("SORT SHUFFLE...")
-        shuffle_list(keys)
-
     cdef list output_chars = []
     cdef Py_ssize_t i = 0
     cdef Py_ssize_t key_len
-    cdef bint replaced = False
-    cdef object key
-    cdef object value
-    cdef object replacement
+    cdef bint replaced
+
+    # Sort or shuffle keys based on the sort_order
+    if sort_order == SortOrder.ASCENDING:
+        if debug:
+            print("Sorting keys in ascending order.")
+        keys.sort()
+    elif sort_order == SortOrder.DESCENDING:
+        if debug:
+            print("Sorting keys in descending order.")
+        keys.sort(reverse=True)
+    elif sort_order == SortOrder.SHUFFLE:
+        if debug:
+            print("Shuffling keys.")
+        random.shurandom.ffle(keys)
 
     while i < input_len:
-        # Probability check
+        replaced = False
+
+        # Reshuffle keys if needed
+        if sort_order == SortOrder.RESHUFFLE:
+            if debug:
+                print("Reshuffling keys.")
+            random.shuffle(keys)
+
+        # Check probability for replacement
         if random.random() > probability:
             output_chars.append(input_string[i])
             i += 1
             continue
 
-        if sort_order == SortOrder.RESHUFFLE:
-            if debug:
-                print("SORT RESHUFFLE...")
-            shuffle_list(keys)
-
-        # Attempt each key in order
+        # Attempt replacements using keys
         for key in keys:
             key_len = len(key)
             if i + key_len > input_len:
                 continue
 
-            # Check if substring from i..i+key_len matches key
-            if input_string[i : i + key_len] == key:
-                # We got a match => pick a replacement
+            # Match the substring
+            if input_string[i:i + key_len] == key:
                 value = replacement_mapping[key]
                 replacement = select_replacement(value, debug)
-                if replacement is None:
+
+                if replacement is None or not isinstance(replacement, str):
+                    # Fallback to copying the single character
                     output_chars.append(input_string[i])
                     i += 1
-                    replaced = True
-                    break
-
-                # replacement must be str
-                if not isinstance(replacement, str):
-                    # fallback => copy the single char
-                    output_chars.append(input_string[i])
-                    i += 1
-                    replaced = True
-                    break
-
-                # Append the entire replacement
-                output_chars.append(replacement)
-                i += key_len
+                else:
+                    # Append the replacement
+                    output_chars.append(replacement)
+                    i += key_len
                 replaced = True
                 break
 
         if not replaced:
-            # no key matched => copy char
+            # No match, copy the current character
             output_chars.append(input_string[i])
             i += 1
 
@@ -309,7 +294,7 @@ def augment_batch(
     dict replacement_mapping, 
     double probability=1.0,
     bint debug=False,
-    int sort_order=3,   # e.g. 3=RESHUFFLE in your code
+    int sort_order=3,   # 3=RESHUFFLE in your code
     int seed=-1
 ) -> list:
     """
