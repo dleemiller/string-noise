@@ -1,16 +1,17 @@
 from functools import cached_property
+import string
 
 from .mappings import *
-from .string_noise import (
+from .noisers import (
+    random_masking,
+    random_mask_batch,
+    random_replacement,
     SHUFFLE,
     RESHUFFLE,
     ASCENDING,
     DESCENDING,
-    random_replacement,
-    # random_masking,
 )
-from .noisers import random_masking, random_mask_batch
-from .string_noise import (
+from .noisers import (
     DEFAULT_VOWEL_MASK,
     DEFAULT_CONSONANT_MASK,
     DEFAULT_DIGIT_MASK,
@@ -19,7 +20,6 @@ from .string_noise import (
     DEFAULT_2BYTE_MASK,
     DEFAULT_4BYTE_MASK,
 )
-import string
 
 
 class LazyNoise:

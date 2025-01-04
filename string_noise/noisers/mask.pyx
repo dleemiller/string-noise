@@ -24,7 +24,15 @@ cdef int DEFAULT_GENERAL_MASK = 0x14
 cdef int DEFAULT_2BYTE_MASK = 0x0378
 cdef int DEFAULT_3BYTE_MASK = 0xF8FF
 cdef int DEFAULT_4BYTE_MASK = 0x1D37F
-
+cdef class DefaultMask:
+    VOWEL: int = DEFAULT_VOWEL_MASK
+    CONSONANT: int = DEFAULT_CONSONANT_MASK
+    DIGIT: int = DEFAULT_DIGIT_MASK
+    NWS: int = DEFAULT_NWS_MASK
+    GENERAL: int = DEFAULT_GENERAL_MASK
+    TWO_BYTE: int = DEFAULT_2BYTE_MASK
+    THREE_BYTE: int = DEFAULT_3BYTE_MASK
+    FOUR_BYTE: int = DEFAULT_4BYTE_MASK
 
 # ---------------------------------------------------------------------
 # Inline helpers
@@ -182,14 +190,14 @@ def random_mask_batch(
     double probability = 0.1,
     int min_consecutive = 1,
     int max_consecutive = 2,
-    int vowel_mask = 0x11,            # or your DEFAULT_VOWEL_MASK
-    int consonant_mask = 0x12,        # or your DEFAULT_CONSONANT_MASK
-    int digit_mask = 0x13,            # ...
-    int nws_mask = 0x10,
-    int general_mask = 0x14,
-    int two_byte_mask = 0x15,
-    int three_byte_mask = 0x16,
-    int four_byte_mask = 0x17,
+    int vowel_mask = DEFAULT_VOWEL_MASK,
+    int consonant_mask = DEFAULT_CONSONANT_MASK,
+    int digit_mask = DEFAULT_DIGIT_MASK,
+    int nws_mask = DEFAULT_NWS_MASK,
+    int general_mask = DEFAULT_GENERAL_MASK,
+    int two_byte_mask = DEFAULT_2BYTE_MASK,
+    int three_byte_mask = DEFAULT_3BYTE_MASK,
+    int four_byte_mask = DEFAULT_4BYTE_MASK,
     double general_mask_probability = 0.5,
     long seed = -1,
     int skip_digits = 0,

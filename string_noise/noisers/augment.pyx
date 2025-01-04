@@ -2,38 +2,35 @@
 # cython: language_level=3
 # cython: boundscheck=False, wraparound=False
 
-"""
-A Cython implementation of 'augment_string' that applies a user-defined mapping
-to randomly replace substrings in an input string.
-
-Example usage:
-
-    from string_noise.noisers.augment_string import augment_string
-
-    output_str = augment_string(
-        input_string="Hello world",
-        replacement_mapping={"world": "planet"},
-        probability=0.5,
-        debug=True,
-        sort_order=3,  # or 0,1,2
-        seed=12345
-    )
-"""
-
-#########################################################
-# Imports
-#########################################################
-
+#"""
+#A Cython implementation of 'augment_string' that applies a user-defined mapping
+#to randomly replace substrings in an input string.
+#
+#Example usage:
+#
+#    from string_noise.noisers.augment_string import augment_string
+#
+#    output_str = augment_string(
+#        input_string="Hello world",
+#        replacement_mapping={"world": "planet"},
+#        probability=0.5,
+#        debug=True,
+#        sort_order=3,  # or 0,1,2
+#        seed=12345
+#    )
+#"""
 import random
 import math
 from cython.view cimport array as cvarray
 from cython cimport sizeof
 
-cdef int ASCENDING = 0
-cdef int DESCENDING = 1
-cdef int SHUFFLE = 2
-cdef int RESHUFFLE = 3
 
+# put sort keys into enum
+cdef class SortOrder:
+    ASCENDING: int = 0
+    DESCENDING: int = 1
+    SHUFFLE: int = 2
+    RESHUFFLE: int = 3
 
 #########################################################
 # Internal Helpers
@@ -180,15 +177,15 @@ cdef str perform_replacements(
     cdef Py_ssize_t key_count = len(keys)
 
     # Sort or shuffle keys array
-    if sort_order == ASCENDING:
+    if sort_order == SortOrder.ASCENDING:
         if debug:
             print("SORT ASCENDING...")
         keys.sort(key=lambda x: x)  # ascending
-    elif sort_order == DESCENDING:
+    elif sort_order == SortOrder.DESCENDING:
         if debug:
             print("SORT DESCENDING...")
         keys.sort(key=lambda x: x, reverse=True)
-    elif sort_order == SHUFFLE:
+    elif sort_order == SortOrder.SHUFFLE:
         if debug:
             print("SORT SHUFFLE...")
         shuffle_list(keys)
@@ -208,7 +205,7 @@ cdef str perform_replacements(
             i += 1
             continue
 
-        if sort_order == 3:  # RESHUFFLE
+        if sort_order == SortOrder.RESHUFFLE:
             if debug:
                 print("SORT RESHUFFLE...")
             shuffle_list(keys)

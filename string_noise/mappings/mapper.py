@@ -3,9 +3,8 @@ import json
 import random
 import re
 import importlib.resources
-from ..string_noise import normalize
-from ..noisers import augment_string, augment_batch
-from ..string_noise import SHUFFLE, RESHUFFLE, ASCENDING, DESCENDING
+
+from ..noisers import normalize, augment_string, augment_batch, ASCENDING
 
 
 class Mapper:
