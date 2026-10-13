@@ -1,5 +1,5 @@
 from .mask import random_masking, random_mask_batch, DefaultMask
-from .augment import augment_string, augment_batch, SortOrder
+from .augment import augment_string, augment_batch, make_rng, SortOrder
 from .random import random_replacement
 from .markov import MarkovModel
 

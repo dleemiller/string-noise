@@ -62,14 +62,14 @@ cdef inline int compare_pyobject_descending(object a, object b):
         return 0
 
 
-cdef int weighted_choice(double[:] weights):
+cdef int weighted_choice(double[:] weights, object rng):
     """
     Given a 1D memoryview of weights (which sum to ~1.0),
     return an index [0..len(weights)-1], chosen by random draw.
     If the sum of weights < 1.0, we'll just compare cumulatively.
     """
     cdef double total_weight = 0.0
-    cdef double r = random.random()
+    cdef double r = rng.random()
     cdef Py_ssize_t i, count = weights.shape[0]
 
     # Accumulate and compare
@@ -81,7 +81,7 @@ cdef int weighted_choice(double[:] weights):
     return -1
 
 
-cdef object select_replacement(object value, bint debug):
+cdef object select_replacement(object value, bint debug, object rng):
     """
     If value is a dict[str->float], pick a weighted random key.
     If value is a list[str], pick uniformly.
@@ -120,7 +120,7 @@ cdef object select_replacement(object value, bint debug):
             wts[i] = float(vals[i])
             sum_w += wts[i]
 
-        idx = weighted_choice(wts)
+        idx = weighted_choice(wts, rng)
         if idx < 0 or idx >= replacement_count:
             return None
 
@@ -131,7 +131,7 @@ cdef object select_replacement(object value, bint debug):
         if replacement_count == 0:
             return None
 
-        idx = random.randint(0, replacement_count - 1)
+        idx = rng.randint(0, replacement_count - 1)
         replacement = value[idx]
 
         if debug:
@@ -144,6 +144,33 @@ cdef object select_replacement(object value, bint debug):
     return replacement
 
 
+cdef object _replacement_weight(object value, str replacement):
+    """
+    Normalized weight of the chosen replacement within its key's options,
+    or None for a direct string replacement.
+    """
+    cdef double total
+    if isinstance(value, dict):
+        total = sum(value.values())
+        return value[replacement] / total if total > 0 else None
+    if isinstance(value, list):
+        return value.count(replacement) / len(value)
+    return None
+
+
+cpdef object make_rng(object seed=-1, object rng=None):
+    """
+    Return the random.Random to use: `rng` if given, else a new generator
+    seeded with `seed` (-1 or None = seeded from system entropy). Never touches
+    the global `random` state, so callers get independent reproducible streams.
+    """
+    if rng is not None:
+        return rng
+    if seed is None or seed == -1:
+        return random.Random()
+    return random.Random(seed)
+
+
 #########################################################
 # The Core Replacement Logic
 #########################################################
@@ -153,7 +180,9 @@ cdef str perform_replacements(
     dict replacement_mapping,
     double probability,
     bint debug,
-    int sort_order
+    int sort_order,
+    object rng,
+    list edits_out=None
 ):
     """
     Perform character replacements in the input string based on the given mapping.
@@ -164,6 +193,9 @@ cdef str perform_replacements(
         probability (double): The probability of making a replacement.
         debug (bool): Whether to print debug information.
         sort_order (int): Order for processing keys (ascending, descending, shuffle).
+        rng (random.Random): Random number generator (not shared global state).
+        edits_out (list): If given, one (start, end, original, replacement, weight)
+            tuple is appended per replacement, in input-string coordinates.
 
     Returns:
         str: The modified string after replacements.
@@ -187,7 +219,7 @@ cdef str perform_replacements(
     elif sort_order == SortOrder.SHUFFLE:
         if debug:
             print("Shuffling keys.")
-        random.shurandom.ffle(keys)
+        rng.shuffle(keys)
 
     while i < input_len:
         replaced = False
@@ -196,10 +228,10 @@ cdef str perform_replacements(
         if sort_order == SortOrder.RESHUFFLE:
             if debug:
                 print("Reshuffling keys.")
-            random.shuffle(keys)
+            rng.shuffle(keys)
 
         # Check probability for replacement
-        if random.random() > probability:
+        if rng.random() > probability:
             output_chars.append(input_string[i])
             i += 1
             continue
@@ -213,7 +245,7 @@ cdef str perform_replacements(
             # Match the substring
             if input_string[i:i + key_len] == key:
                 value = replacement_mapping[key]
-                replacement = select_replacement(value, debug)
+                replacement = select_replacement(value, debug, rng)
 
                 if replacement is None or not isinstance(replacement, str):
                     # Fallback to copying the single character
@@ -222,6 +254,14 @@ cdef str perform_replacements(
                 else:
                     # Append the replacement
                     output_chars.append(replacement)
+                    if edits_out is not None:
+                        edits_out.append((
+                            i,
+                            i + key_len,
+                            key,
+                            replacement,
+                            _replacement_weight(value, replacement),
+                        ))
                     i += key_len
                 replaced = True
                 break
@@ -244,8 +284,10 @@ def augment_string(
     probability: float = 1.0,
     debug: bool = False,
     sort_order: int = 3,  # default = RESHUFFLE
-    seed: int = -1
-) -> str:
+    seed: int = -1,
+    rng=None,
+    return_edits: bool = False,
+):
     """
     Applies the user-supplied 'replacement_mapping' to randomly corrupt 'input_string'.
     - `replacement_mapping` can have:
@@ -255,8 +297,12 @@ def augment_string(
     - `probability`: chance to attempt a replacement at each character.
     - `debug`: if True, print debug info.
     - `sort_order` in {0=ASCENDING, 1=DESCENDING, 2=SHUFFLE, 3=RESHUFFLE}.
+    - `seed`: seed for a fresh generator (-1 = system entropy); ignored if `rng` given.
+    - `rng`: a random.Random to draw from (lets callers share one stream).
+    - `return_edits`: if True, return (augmented, edits) where each edit is
+      (start, end, original, replacement, weight) in input coordinates.
 
-    Returns the augmented string.
+    Returns the augmented string, or (string, edits) if `return_edits`.
     Raises ValueError or TypeError on invalid arguments.
     """
 
@@ -268,11 +314,8 @@ def augment_string(
     if probability < 0.0 or probability > 1.0:
         raise ValueError("probability must be between 0 and 1")
 
-    if seed == -1:
-        # seed with system time or any random seed
-        random.seed()
-    else:
-        random.seed(seed)
+    rng = make_rng(seed, rng)
+    cdef list edits = [] if return_edits else None
 
     # Validate the replacement mapping
     if not _validate_replacement_mapping(replacement_mapping):
@@ -284,8 +327,12 @@ def augment_string(
         replacement_mapping=replacement_mapping,
         probability=probability,
         debug=debug,
-        sort_order=sort_order
+        sort_order=sort_order,
+        rng=rng,
+        edits_out=edits,
     )
+    if return_edits:
+        return out, edits
     return out
 
 
@@ -295,7 +342,9 @@ def augment_batch(
     double probability=1.0,
     bint debug=False,
     int sort_order=3,   # 3=RESHUFFLE in your code
-    int seed=-1
+    object seed=-1,
+    object rng=None,
+    bint return_edits=False,
 ) -> list:
     """
     Apply the same 'augment_string' logic to a list of strings.
@@ -305,17 +354,16 @@ def augment_batch(
     - probability: chance to apply a replacement at each character
     - debug: whether to print debug info
     - sort_order: 0=ASC, 1=DESC, 2=SHUFFLE, 3=RESHUFFLE
-    - seed: random seed (if -1, use system time)
+    - seed: random seed (if -1, use system entropy); ignored if `rng` given
+    - rng: a random.Random to draw from
+    - return_edits: if True, each result is (string, edits) as in augment_string
 
-    Returns a list[str] of augmented strings, one per input string.
+    Returns a list of augmented strings (or (string, edits) pairs), one per input.
     """
     cdef str s
+    cdef list edits
 
-    # Basic argument checks
-    if seed == -1:
-        random.seed()
-    else:
-        random.seed(seed)
+    rng = make_rng(seed, rng)
 
     if not (0.0 <= probability <= 1.0):
         raise ValueError("probability must be between 0 and 1.")
@@ -338,14 +386,17 @@ def augment_batch(
 
     for i in range(n):
         s = input_strings[i]
+        edits = [] if return_edits else None
         out = perform_replacements(
             input_string=s,
             replacement_mapping=replacement_mapping,
             probability=probability,
             debug=debug,
-            sort_order=sort_order
+            sort_order=sort_order,
+            rng=rng,
+            edits_out=edits,
         )
-        results[i] = out
+        results[i] = (out, edits) if return_edits else out
 
     return results
 

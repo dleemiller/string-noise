@@ -138,6 +138,27 @@ masked_result = noise.mask("Hello world!", probability=0.5, seed=42)
 print(masked_result)  # Output might be 'H\x06\x07l\x06 \x09\x07rld!', depending on the random seed
 ```
 
+### 4. Edits, word-level corruption and mixtures
+Mappers can report exactly what they changed, for labelled evaluation and training data.
+
+- `rng (random.Random)`: Optional on every mapper; draw from this generator instead of a fresh one seeded by `seed`. The global `random` state is never touched.
+- `return_edits=True`: return `(noisy, edits)`; each edit is `(start, end, original, replacement, weight)` in coordinates of the input, where `weight` is the normalized probability of that replacement.
+- `mapper.corrupt(text, ...)`: returns a `Corruption(original, noisy, edits, kind)` with `Edit` named tuples tagged by noise kind.
+- `noise.moe.variants(word)` / `noise.mispelling.variants(word)`: every known misspelling of a word with its probability (Norvig-style `word*N` counts and repeated entries become weights).
+- `NoiseMixture({kind: (noiser, weight)})`: corrupt a word with one noise source drawn by weight, falling back to the others when the drawn one cannot change the word.
+- `CustomMapper.new(path, resource_package=None, kind=...)` / `CustomDictMapper.new(...)`: load local `.json` or `.json.gz` mappings.
+
+```python
+from string_noise import noise, NoiseMixture, apply_edits
+
+c = noise.moe.corrupt("Because", seed=1)
+print(c.noisy, c.edits)  # Becauss (Edit(start=0, end=7, original='Because', replacement='Becauss', weight=0.0228, kind='moe'),)
+
+mix = NoiseMixture({"moe": (noise.moe, 0.7), "keyboard": (noise.keyboard, 0.3)}, probability=0.3)
+c = mix.corrupt("because", seed=2)  # e.g. 'becsuse', kind='keyboard'
+assert apply_edits(c.original, c.edits) == c.noisy
+```
+
 ## Contributing
 Contributions to `string-noise` are welcome! Please refer to the project's issues and pull request sections on [GitHub](https://github.com/your-repository-url).
 
