@@ -18,9 +18,24 @@ static PyObject* convert_and_normalize(PyObject* input, int debug) {
         }
         Py_ssize_t size = PyList_Size(input);
         dict = PyDict_New();
+        // Duplicates accumulate, so repeated entries keep their frequency weight.
         for (Py_ssize_t i = 0; i < size; i++) {
             PyObject* item = PyList_GetItem(input, i);
-            PyDict_SetItem(dict, item, PyFloat_FromDouble(1.0 / size));
+            PyObject* prev = PyDict_GetItemWithError(dict, item);
+            double w = 1.0 / size;
+            if (prev != NULL) {
+                w += PyFloat_AsDouble(prev);
+            } else if (PyErr_Occurred()) {
+                Py_DECREF(dict);
+                return NULL;
+            }
+            PyObject* weight = PyFloat_FromDouble(w);
+            if (weight == NULL || PyDict_SetItem(dict, item, weight) < 0) {
+                Py_XDECREF(weight);
+                Py_DECREF(dict);
+                return NULL;
+            }
+            Py_DECREF(weight);
         }
     } else if (PyDict_Check(input)) {
         if (debug) {
@@ -30,12 +45,13 @@ static PyObject* convert_and_normalize(PyObject* input, int debug) {
         while (PyDict_Next(input, &pos, &key, &value)) {
             if (PyUnicode_Check(value)) {
                 PyObject* new_dict = PyDict_New();
-                PyDict_SetItem(new_dict, value, PyFloat_FromDouble(1.0));
+                PyObject* one = PyFloat_FromDouble(1.0);
+                PyDict_SetItem(new_dict, value, one);
+                Py_DECREF(one);
                 PyDict_SetItem(dict, key, new_dict);
                 Py_DECREF(new_dict);
             } else {
-                PyDict_SetItem(dict, key, value);
-                Py_INCREF(value);
+                PyDict_SetItem(dict, key, value);  // SetItem takes its own reference
             }
         }
     } else {
@@ -109,7 +125,9 @@ PyObject* normalize(PyObject* self, PyObject* args, PyObject* kwargs) {
             normalized_value = convert_and_normalize(value, debug);
         } else if (PyUnicode_Check(value)) {
             normalized_value = PyDict_New();
-            PyDict_SetItem(normalized_value, value, PyFloat_FromDouble(1.0));
+            PyObject* one = PyFloat_FromDouble(1.0);
+            PyDict_SetItem(normalized_value, value, one);
+            Py_DECREF(one);
         } else {
             normalized_value = value;
             Py_INCREF(normalized_value);
